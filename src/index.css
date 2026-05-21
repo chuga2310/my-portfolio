@@ -49,8 +49,8 @@ section.snap {
   display: flex; flex-direction: column; justify-content: center; position: relative;
 }
 @media (max-width: 768px) {
-  section.snap { padding: 88px 20px 56px; }
-  html { scroll-snap-type: y proximity; }
+  section.snap { padding: 88px 20px 56px; scroll-snap-align: none; }
+  html { scroll-snap-type: none; }
 }
 
 /* Nav */
@@ -158,6 +158,7 @@ p.body { font-size: clamp(15px,1.2vw,18px); line-height: 1.55; color: var(--text
 
 /* Hero 3D */
 .hero-3d { position: absolute; inset: 0; max-width: none; margin: 0; }
+@media (max-width: 900px) { .hero-3d { display: none; } }
 .hero-3d .orbit-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; color: var(--text-mute); text-align: center; padding: 4px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); position: relative; }
 .hero-3d .orbit-label::before, .hero-3d .orbit-label::after { content: ""; position: absolute; top: 50%; transform: translateY(-50%); width: 4px; height: 4px; background: var(--accent); border-radius: 50%; }
 .hero-3d .orbit-label::before { left: 0; }

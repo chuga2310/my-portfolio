@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import type { LangContent } from '../../lib/types';
 import { HeroScene } from './HeroScene';
 
@@ -9,9 +10,18 @@ function scrollTo(id: string, e: React.MouseEvent) {
 }
 
 export function Hero({ t }: Props) {
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 901px)').matches);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 901px)');
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   return (
     <section id="hero" className="snap" data-screen-label="01 Hero">
-      <HeroScene />
+      {isDesktop && <HeroScene />}
       <div className="hero">
         <div>
           <div className="kicker"><span className="accent">●</span>&nbsp;&nbsp;{t.hero.kicker}</div>
