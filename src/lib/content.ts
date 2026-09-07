@@ -40,8 +40,8 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
       label: '03 / Experience',
       title: 'Track record.',
       items: [
-        { y: '2023 — Now', org: 'Independent', role: 'AI Adoption Consultant', loc: 'Remote', body: 'Advise SMEs and product teams on applying AI to their business: workflow audits, LLM use-case discovery, RAG & agent architecture, tool selection (Claude, GPT, Gemini, n8n), and team enablement — from pilot to production rollout.' },
-        { y: 'May 2024 — Now', org: 'Afforai (Logically)', role: 'AI Product Builder / Project Leader', loc: 'Remote', body: 'Shipped AI-powered document tools (Logically, Cite Extension). Designed RAG pipelines on OpenAI/Anthropic/Gemini. Owned full stack — React, Node, Postgres, Mongo, GCP.' },
+        { y: 'May 2025 — Now', org: 'Afforai (Logically)', role: 'AI Product Builder / Project Leader', loc: 'Remote', body: 'Shipped AI-powered document tools (Logically, Cite Extension). Designed RAG pipelines on OpenAI/Anthropic/Gemini. Owned full stack — React, Node, Postgres, Mongo, GCP.' },
+        { y: 'May 2024 — May 2025', org: 'Undisclosed Company', role: 'Fullstack Developer / Tech Lead', loc: 'Remote', body: 'Built and maintained web products end to end under NDA. React/TypeScript frontend, Node backend, Postgres & Mongo data layer, cloud deployment and CI/CD.' },
         { y: 'Dec 2020 — May 2024', org: 'FPT Telecom', role: 'Project Manager / Software Developer', loc: 'Hanoi', body: 'Led FPT Partner Platform (7 people), Coca-Cola AR Training (10 people), IRIS 3D Web/Desktop (Three.js + Electron), LearnR Blockchain — Top 5 Aura Hackathon 2022.' },
         { y: 'Oct 2019 — Nov 2020', org: 'Lumi Vietnam', role: 'Mobile Developer', loc: 'Hanoi', body: 'Built IoT mobile apps with React Native, BLE and MQTT. Owned iOS / Android release pipelines.' },
         { y: 'Jan 2018 — Oct 2019', org: 'DigiMed / VJ-Soft', role: 'Mobile Developer (Android + RN)', loc: 'Hanoi', body: 'Shipped mobile features end-to-end from Figma → prod. RESTful, Firebase, SQLite. Habit of documenting edge cases.' },
@@ -168,8 +168,8 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
       label: '03 / Kinh nghiệm',
       title: 'Track record.',
       items: [
-        { y: '2023 — Nay', org: 'Độc lập', role: 'Tư vấn áp dụng AI cho doanh nghiệp', loc: 'Remote', body: 'Tư vấn SME và product team áp dụng AI vào vận hành: audit quy trình, tìm use-case LLM, kiến trúc RAG & agent, chọn công cụ (Claude, GPT, Gemini, n8n), đào tạo đội ngũ — từ pilot tới triển khai production.' },
-        { y: '5/2024 — Nay', org: 'Afforai (Logically)', role: 'AI Product Builder / Project Leader', loc: 'Remote', body: 'Ship sản phẩm AI xử lý tài liệu (Logically, Cite Extension). Thiết kế RAG trên OpenAI/Anthropic/Gemini. Owner toàn stack — React, Node, Postgres, Mongo, GCP.' },
+        { y: '5/2025 — Nay', org: 'Afforai (Logically)', role: 'AI Product Builder / Project Leader', loc: 'Remote', body: 'Ship sản phẩm AI xử lý tài liệu (Logically, Cite Extension). Thiết kế RAG trên OpenAI/Anthropic/Gemini. Owner toàn stack — React, Node, Postgres, Mongo, GCP.' },
+        { y: '5/2024 — 5/2025', org: 'Công ty ẩn danh', role: 'Fullstack Developer / Tech Lead', loc: 'Remote', body: 'Xây và vận hành sản phẩm web end-to-end theo NDA. Frontend React/TypeScript, backend Node, dữ liệu Postgres & Mongo, triển khai cloud và CI/CD.' },
         { y: '12/2020 — 5/2024', org: 'FPT Telecom', role: 'Project Manager / Software Developer', loc: 'Hà Nội', body: 'Dẫn FPT Partner Platform (7 người), Coca-Cola AR Training (10 người), IRIS 3D Web/Desktop (Three.js + Electron), LearnR Blockchain — Top 5 Aura Hackathon 2022.' },
         { y: '10/2019 — 11/2020', org: 'Lumi Vietnam', role: 'Mobile Developer', loc: 'Hà Nội', body: 'Build app IoT bằng React Native, BLE và MQTT. Owner release pipeline iOS / Android.' },
         { y: '1/2018 — 10/2019', org: 'DigiMed / VJ-Soft', role: 'Mobile Developer (Android + RN)', loc: 'Hà Nội', body: 'Ship feature mobile end-to-end từ Figma → production. RESTful, Firebase, SQLite. Thói quen document edge case.' },
