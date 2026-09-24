@@ -45,6 +45,10 @@ export default function App() {
     return () => { bgApi.current?.destroy(); bgApi.current = null; };
   }, []);
 
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+
   return (
     <>
       <TopNav lang={lang} setLang={setLang} t={t} />
