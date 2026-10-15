@@ -24,7 +24,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Warn when the Turnstile sitekey variable is missing
+        if: ${{ vars.VITE_TURNSTILE_SITEKEY == '' }}
+        run: echo "::warning::Repository variable VITE_TURNSTILE_SITEKEY is not set; JD Matcher requests will fail the bot check."
       - run: npm run build
+        env:
+          # The only two variables the bundle may contain; both are public.
+          VITE_API_BASE: https://jd-api.cuongle.technet.software
+          VITE_TURNSTILE_SITEKEY: ${{ vars.VITE_TURNSTILE_SITEKEY }}
+      - name: Check bundle for secrets and internal hosts
+        run: npm run check:dist
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

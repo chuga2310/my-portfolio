@@ -1,35 +1,29 @@
-import { useState, useEffect } from 'react';
-import type { LangContent } from '../../lib/types';
-import { HeroScene } from './HeroScene';
+import type { Lang, LangContent } from '../../lib/types';
+import { JdMatchPanel } from '../jd-match/JdMatchPanel';
 
-interface Props { t: LangContent; }
+interface Props { t: LangContent; lang: Lang; }
 
 function scrollTo(id: string, e: React.MouseEvent) {
   e.preventDefault();
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 }
 
-export function Hero({ t }: Props) {
-  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 901px)').matches);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 901px)');
-    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
+export function Hero({ t, lang }: Props) {
   return (
     <section id="hero" className="snap" data-screen-label="01 Hero">
-      {isDesktop && <HeroScene />}
-      <div className="hero">
-        <div>
+      <div className="hero-grid">
+        <div className="hero hero-intro">
           <div className="kicker"><span className="accent">●</span>&nbsp;&nbsp;{t.hero.kicker}</div>
           <h1 className="display" style={{ marginTop: 24 }}>
             <span className="holo">{t.hero.name}</span>
           </h1>
           <div className="roles">{t.hero.roles.map((r) => <span key={r}>{r}</span>)}</div>
           <p className="tagline">{t.hero.tagline}</p>
+        </div>
+        <div className="hero-panel">
+          <JdMatchPanel t={t} lang={lang} />
+        </div>
+        <div className="hero hero-rest">
           <div className="ctas">
             <a href="#projects" className="btn primary" onClick={(e) => scrollTo('projects', e)}>
               {t.hero.cta_primary} <span className="arrow">→</span>

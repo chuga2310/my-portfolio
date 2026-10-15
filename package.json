@@ -8,11 +8,15 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "images": "tsx --tsconfig tsconfig.node.json scripts/generate-images.tsx"
+    "images": "tsx --tsconfig tsconfig.node.json scripts/generate-images.tsx",
+    "mock:api": "node scripts/mock-jd-api.mjs",
+    "check:dist": "node scripts/check-dist.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "@types/three": "^0.184.1",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "tailwindcss": "^4.3.0",

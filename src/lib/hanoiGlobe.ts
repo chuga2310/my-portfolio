@@ -29,6 +29,10 @@ function buildGraticule(radius: number) {
   return group;
 }
 
+type Ring = [number, number][];
+interface GeoGeometry { type: string; coordinates?: unknown; geometries?: GeoGeometry[] }
+interface GeoJson extends GeoGeometry { features?: { geometry: GeoGeometry | null }[] }
+
 const FALLBACK_GEO = {
   type: 'FeatureCollection',
   features: [
@@ -40,7 +44,7 @@ const FALLBACK_GEO = {
   ],
 };
 
-function buildContinents(geojson: any, radius: number) {
+function buildContinents(geojson: GeoJson, radius: number) {
   const group = new THREE.Group();
   const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });
   function addRing(coords: [number,number][]) {
@@ -48,13 +52,13 @@ function buildContinents(geojson: any, radius: number) {
     if (pts.length < 2) return;
     group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
   }
-  function walk(g: any) {
+  function walk(g: GeoGeometry | null | undefined) {
     if (!g) return;
-    if (g.type === 'Polygon') g.coordinates.forEach(addRing);
-    else if (g.type === 'MultiPolygon') g.coordinates.forEach((p: any) => p.forEach(addRing));
-    else if (g.type === 'GeometryCollection') g.geometries.forEach(walk);
+    if (g.type === 'Polygon') (g.coordinates as Ring[]).forEach(addRing);
+    else if (g.type === 'MultiPolygon') (g.coordinates as Ring[][]).forEach((p) => p.forEach(addRing));
+    else if (g.type === 'GeometryCollection') g.geometries?.forEach(walk);
   }
-  if (geojson.type === 'FeatureCollection') geojson.features.forEach((f: any) => walk(f.geometry));
+  if (geojson.type === 'FeatureCollection') geojson.features?.forEach((f) => walk(f.geometry));
   else walk(geojson);
   return group;
 }
@@ -128,7 +132,7 @@ export function mountHanoiGlobe(el: HTMLElement, opts: { accent: string }) {
           root.add(continents);
         }
       }
-    } catch {}
+    } catch { /* offline: keep the built-in low-res outline */ }
   })();
 
   const HANOI: [number,number] = [21.0285, 105.8542];
@@ -205,8 +209,12 @@ export function mountHanoiGlobe(el: HTMLElement, opts: { accent: string }) {
     setAccent(c: string) {
       accent = c;
       const col = new THREE.Color(c);
-      pin.children.forEach((m: any) => { if (m.material?.color) m.material.color.set(col); });
-      arcs.children.forEach((m: any) => { if (m.material?.color) m.material.color.set(col); });
+      const recolor = (o: THREE.Object3D) => {
+        const mat = (o as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined;
+        if (mat?.color) mat.color.set(col);
+      };
+      pin.children.forEach(recolor);
+      arcs.children.forEach(recolor);
       (equator.material as THREE.LineBasicMaterial).color.set(col);
     },
   };

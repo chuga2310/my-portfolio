@@ -55,7 +55,7 @@ export default function App() {
       <Rail sections={SECTIONS} active={active} t={t} />
       <ScrollProgress value={progress} idx={idx} total={SECTIONS.length} />
       <div className="scroller">
-        <Hero t={t} />
+        <Hero t={t} lang={lang} />
         <About t={t} accentHex={ACCENT_HEX} />
         <Skills t={t} />
         <Experience t={t} />

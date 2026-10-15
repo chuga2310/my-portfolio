@@ -1,3 +1,7 @@
+import type {
+  ExtractErrorCode, GroupId, PanelErrorCode, RouteReason, StageId, StageStatus, Tier, VerdictLevel,
+} from './jd/types';
+
 export interface NavContent {
   hero: string; about: string; skills: string; exp: string;
   projects: string; agents: string; metrics: string; awards: string; contact: string;
@@ -30,10 +34,39 @@ export interface EduInfo { school: string; degree: string; years: string; gpa: s
 export interface AwardsContent { label: string; title: string; awards: AwardItem[]; edu: EduInfo; }
 export interface ContactLink { k: string; v: string; href: string | null; }
 export interface ContactContent { label: string; title: string; sub: string; email: string; phone: string; links: ContactLink[]; cta: string; foot: string; }
+export type JdPhase = 'idle' | 'extracting' | 'streaming' | 'done' | 'error' | 'cooldown' | 'paused';
+/** Strings may contain `{name}` placeholders, filled by `fmt()` in lib/jd/format.ts. */
+export interface JdContent {
+  kicker: string; title: string; sub: string;
+  phase: Record<JdPhase, string>;
+  tabs: { label: string; file: string; paste: string };
+  drop: { title: string; hint: string; browse: string; reading: string; pasteInstead: string };
+  paste: { label: string; placeholder: string; count: string };
+  analyze: string; again: string; retry: string; back: string; truncated: string;
+  pipeline: string; pipelineTotal: string; extracted: string;
+  stages: Record<StageId, string>;
+  status: Record<StageStatus | 'pending', string>;
+  provider: { self: string; fallback: string; reasons: Record<RouteReason, string> };
+  groups: Record<GroupId, string>;
+  levels: Record<VerdictLevel, string>;
+  tiers: Record<Tier, string>;
+  result: {
+    score: string; matched: string; gaps: string; evidence: string; highlight: string;
+    highlightHint: string; noGaps: string; cached: string; showAll: string; showLess: string;
+  };
+  cooldown: { title: string; next: string; daily: string; left: string };
+  paused: { title: string; body: string; cv: string; contact: string };
+  retryIn: string;
+  errors: Record<PanelErrorCode | ExtractErrorCode, string>;
+  refunded: string;
+  privacy: string;
+  live: { stage: string; result: string };
+}
 export interface LangContent {
   nav: NavContent; hero: HeroContent; about: AboutContent; skills: SkillsContent;
   exp: ExpContent; projects: ProjectsContent; agents: AgentsContent;
   metrics: MetricsContent; awards: AwardsContent; contact: ContactContent;
+  jd: JdContent;
 }
 export type Lang = 'en' | 'vi';
 export interface Section { id: string; key: keyof NavContent; }

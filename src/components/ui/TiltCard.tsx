@@ -5,9 +5,12 @@ interface Props {
   className?: string;
   style?: CSSProperties;
   intensity?: number;
+  /** data-jd-* hooks for JD Matcher's highlight-on-page. */
+  jdSection?: string;
+  jdKey?: string;
 }
 
-export function TiltCard({ children, className = '', style, intensity = 8 }: Props) {
+export function TiltCard({ children, className = '', style, intensity = 8, jdSection, jdKey }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   function onMove(e: React.MouseEvent) {
@@ -26,7 +29,15 @@ export function TiltCard({ children, className = '', style, intensity = 8 }: Pro
   }
 
   return (
-    <div ref={ref} className={`glass tilt ${className}`} style={style} onMouseMove={onMove} onMouseLeave={onLeave}>
+    <div
+      ref={ref}
+      className={`glass tilt ${className}`}
+      style={style}
+      data-jd-section={jdSection}
+      data-jd-key={jdKey}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+    >
       {children}
     </div>
   );
