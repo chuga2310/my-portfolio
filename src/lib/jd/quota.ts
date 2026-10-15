@@ -41,5 +41,6 @@ export function clearCooldown(): void {
 
 export function formatCountdown(sec: number): string {
   const s = Math.max(0, Math.ceil(sec));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const mmss = `${String(Math.floor((s % 3600) / 60)).padStart(s >= 3600 ? 2 : 1, '0')}:${String(s % 60).padStart(2, '0')}`;
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${mmss}` : mmss;
 }

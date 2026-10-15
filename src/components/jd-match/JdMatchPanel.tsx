@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { Lang, LangContent } from '../../lib/types';
 import { AnalyzeError, analyzeStream } from '../../lib/jd/analyzeStream';
-import { clampText, ExtractError, extractText, normalizeText } from '../../lib/jd/extractText';
+import { checkLength, ExtractError, extractText, normalizeText } from '../../lib/jd/extractText';
 import { fmt } from '../../lib/jd/format';
 import { clearCooldown, fetchQuota, formatCountdown, readNextAllowedAt, saveCooldown } from '../../lib/jd/quota';
 import { getTurnstileToken, preloadTurnstile } from '../../lib/jd/turnstile';
-import { STAGE_IDS, TEXT_MAX, type PanelErrorCode } from '../../lib/jd/types';
+import { STAGE_IDS, type PanelErrorCode } from '../../lib/jd/types';
 import { useCountdown } from '../../hooks/useCountdown';
 import { initPanel, panelReducer, type PanelInput } from './panelState';
 import { JdDropzone, type InputTab } from './JdDropzone';
@@ -14,7 +14,9 @@ import { SectionBars } from './SectionBars';
 import { MatchResult } from './MatchResult';
 
 const COOLDOWN_FALLBACK_SEC = 15 * 60;
-const NO_RETRY: PanelErrorCode[] = ['INVALID_INPUT', 'PAYLOAD_TOO_LARGE', 'DAILY_CAP_REACHED', 'NOT_CONFIGURED'];
+/** A 429 this short is the gateway saying "busy, retry soon", not a per-visitor limit. */
+const BUSY_MAX_SEC = 60;
+const NO_RETRY: PanelErrorCode[] = ['INVALID_INPUT', 'PAYLOAD_TOO_LARGE', 'NOT_CONFIGURED'];
 const STREAM_ERRORS: PanelErrorCode[] = ['LLM_UNAVAILABLE', 'TIMEOUT', 'INTERNAL', 'FALLBACK_LIMITED'];
 
 interface Props { t: LangContent; lang: Lang; }
@@ -36,7 +38,7 @@ export function JdMatchPanel({ t: content, lang }: Props) {
   const retryLeft = useCountdown(state.error?.retryAt ?? null);
 
   // A finished countdown means the visitor may analyze again; no effect needed to leave cooldown.
-  const phase = state.phase === 'cooldown' && !state.dailyCapped && secondsLeft === 0 ? 'idle' : state.phase;
+  const phase = state.phase === 'cooldown' && secondsLeft === 0 ? 'idle' : state.phase;
 
   const refreshQuota = useCallback((signal?: AbortSignal) => {
     fetchQuota(signal)
@@ -85,6 +87,7 @@ export function JdMatchPanel({ t: content, lang }: Props) {
         { text: input.text, lang, source: input.source, turnstileToken: token },
         (ev) => {
           if (ev.type === 'stage') dispatch({ type: 'stage', ev: ev.data });
+          else if (ev.type === 'activity') dispatch({ type: 'activity', ev: ev.data });
           else if (ev.type === 'section') dispatch({ type: 'section', ev: ev.data });
           else if (ev.type === 'result') {
             finished = true;
@@ -99,17 +102,19 @@ export function JdMatchPanel({ t: content, lang }: Props) {
       );
     } catch (err) {
       if (ac.signal.aborted) return;
+      // No automatic retries: every path below waits for the visitor to act.
       if (err instanceof AnalyzeError && err.code === 'RATE_LIMITED') {
-        dispatch({ type: 'rateLimited', until: saveCooldown(err.retryAfterSec || COOLDOWN_FALLBACK_SEC) });
+        const sec = err.retryAfterSec || COOLDOWN_FALLBACK_SEC;
+        const busy = sec <= BUSY_MAX_SEC;
+        dispatch({ type: 'rateLimited', until: busy ? Date.now() + sec * 1000 : saveCooldown(sec), busy });
         return;
       }
-      if (err instanceof AnalyzeError && err.code === 'DEMO_PAUSED') {
-        dispatch({ type: 'paused' });
+      if (err instanceof AnalyzeError && (err.code === 'DEMO_PAUSED' || err.code === 'DAILY_CAP_REACHED')) {
+        dispatch({ type: 'rest', reason: err.code === 'DEMO_PAUSED' ? 'paused' : 'daily' });
         return;
       }
       const code: PanelErrorCode = err instanceof AnalyzeError ? err.code as PanelErrorCode : 'NETWORK';
       dispatch({ type: 'fail', error: { code, refunded: false, retryAt: null } });
-      if (code === 'DAILY_CAP_REACHED') refreshQuota();
       return;
     }
     if (finished) refreshQuota();
@@ -119,8 +124,8 @@ export function JdMatchPanel({ t: content, lang }: Props) {
     markUsed();
     dispatch({ type: 'extract', fileName: file.name });
     try {
-      const { text, truncated } = await extractText(file);
-      void run({ text, source: 'file', truncated });
+      const text = await extractText(file);
+      void run({ text, source: 'file' });
     } catch (err) {
       dispatch({ type: 'extractFail', code: err instanceof ExtractError ? err.code : 'read_failed' });
     }
@@ -128,8 +133,10 @@ export function JdMatchPanel({ t: content, lang }: Props) {
 
   const onSubmitText = useCallback(() => {
     markUsed();
-    const { text, truncated } = clampText(normalizeText(pasteText));
-    void run({ text, source: 'paste', truncated });
+    const text = normalizeText(pasteText);
+    const problem = checkLength(text);
+    if (problem) dispatch({ type: 'extractFail', code: problem });
+    else void run({ text, source: 'paste' });
   }, [markUsed, pasteText, run]);
 
   const reset = useCallback(() => dispatch({ type: 'reset', now: Date.now() }), []);
@@ -140,12 +147,19 @@ export function JdMatchPanel({ t: content, lang }: Props) {
   const totalMs = stages.done.ms ?? STAGE_IDS.reduce((sum, id) => sum + (id === 'done' ? 0 : stages[id].ms ?? 0), 0);
   const streamStarted = STAGE_IDS.some((id) => stages[id].status !== 'pending' && stages[id].status !== 'skipped');
 
+  // Announce what the server says each stage is doing; activity lines are deliberately not announced.
   let live = '';
   if (phase === 'done' && result) {
     live = fmt(t.live.result, { score: `~${result.overall}%`, tier: t.tiers[result.tier] });
   } else if (phase === 'streaming' && state.lastStage) {
-    live = fmt(t.live.stage, { stage: t.stages[state.lastStage.stage], status: t.status[state.lastStage.status] });
+    const { stage, status } = state.lastStage;
+    const { label, detail } = stages[stage];
+    live = label
+      ? (status === 'running' || !detail ? label : `${label}: ${detail}`)
+      : fmt(t.live.stage, { stage: t.stages[stage], status: t.status[status] });
   }
+  const verifying = phase === 'streaming' && !state.lastStage;
+  const fallbackWait = error?.code === 'FALLBACK_LIMITED' && retryLeft > 0;
 
   return (
     <div
@@ -165,15 +179,15 @@ export function JdMatchPanel({ t: content, lang }: Props) {
         <h2 className="jd-title" id="jd-title">{t.title}</h2>
         {(phase === 'idle' || phase === 'extracting' || phase === 'cooldown') && <p className="jd-sub">{t.sub}</p>}
 
-        {phase === 'paused' && (
+        {phase === 'resting' && (
           <div className="jd-paused" role="status">
-            <span className="jd-paused-title">{t.paused.title}</span>
-            <p className="jd-muted">{t.paused.body}</p>
+            <span className="jd-paused-title">{t.rest.title}</span>
+            <p className="jd-muted">{state.rest === 'daily' ? t.rest.daily : t.rest.paused}</p>
             <div className="jd-actions">
               <a href="#exp" className="btn primary jd-btn" onClick={(e) => jumpTo('exp', e)}>
-                {t.paused.cv} <span className="arrow">→</span>
+                {t.rest.cv} <span className="arrow">→</span>
               </a>
-              <a href="#contact" className="btn ghost jd-btn" onClick={(e) => jumpTo('contact', e)}>{t.paused.contact}</a>
+              <a href="#contact" className="btn ghost jd-btn" onClick={(e) => jumpTo('contact', e)}>{t.rest.contact}</a>
             </div>
           </div>
         )}
@@ -203,15 +217,9 @@ export function JdMatchPanel({ t: content, lang }: Props) {
               />
               {phase === 'cooldown' && (
                 <div className="jd-cooldown" role="status">
-                  {state.dailyCapped ? (
-                    <span className="jd-cooldown-msg">{t.cooldown.daily}</span>
-                  ) : (
-                    <>
-                      <span className="jd-cooldown-time" role="timer" aria-live="off">{formatCountdown(secondsLeft)}</span>
-                      <span className="jd-cooldown-msg">{fmt(t.cooldown.next, { time: formatCountdown(secondsLeft) })}</span>
-                      <span className="jd-muted">{t.cooldown.title}</span>
-                    </>
-                  )}
+                  <span className="jd-cooldown-time" role="timer" aria-live="off">{formatCountdown(secondsLeft)}</span>
+                  <span className="jd-cooldown-msg">{fmt(t.cooldown.next, { time: formatCountdown(secondsLeft) })}</span>
+                  <span className="jd-muted">{state.cooldownBusy ? t.cooldown.busy : t.cooldown.title}</span>
                 </div>
               )}
             </div>
@@ -223,7 +231,9 @@ export function JdMatchPanel({ t: content, lang }: Props) {
             {phase === 'error' && error && (
               <>
                 <div className="jd-alert is-error" role="alert">
-                  <span>{t.errors[error.code]}</span>
+                  <span>
+                    {fallbackWait ? fmt(t.fallbackWait, { time: formatCountdown(retryLeft) }) : t.errors[error.code]}
+                  </span>
                   {error.refunded && !error.retryAt && <span className="jd-muted">{t.refunded}</span>}
                 </div>
                 <div className="jd-actions">
@@ -241,8 +251,8 @@ export function JdMatchPanel({ t: content, lang }: Props) {
                 </div>
               </>
             )}
-            {phase === 'streaming' && input?.truncated && (
-              <p className="jd-muted">{fmt(t.truncated, { max: TEXT_MAX.toLocaleString(lang) })}</p>
+            {verifying && (
+              <p className="jd-verifying"><span className="jd-spinner" aria-hidden="true" />{t.verifying}</p>
             )}
             {streamStarted || phase === 'streaming' ? (
               <div className="jd-run">
@@ -278,13 +288,13 @@ export function JdMatchPanel({ t: content, lang }: Props) {
         )}
       </div>
 
+      <div ref={turnstileRef} className="jd-turnstile" />
       <div className="jd-foot">
         <span>🔒 {t.privacy}</span>
         {state.dailyLeft !== null && state.dailyLeft > 0 && (
           <span>{fmt(t.cooldown.left, { n: state.dailyLeft })}</span>
         )}
       </div>
-      <div ref={turnstileRef} className="jd-turnstile" />
       <div className="sr-only" aria-live="polite" aria-atomic="true">{live}</div>
     </div>
   );

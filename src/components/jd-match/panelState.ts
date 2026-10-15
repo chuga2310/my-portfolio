@@ -1,14 +1,24 @@
 import type { JdPhase } from '../../lib/types';
 import {
   STAGE_IDS,
-  type ExtractErrorCode, type GroupId, type MatchResult, type PanelErrorCode, type Provider,
-  type Quota, type SectionEvent, type StageEvent, type StageId, type StageStatus,
+  type ActivityEvent, type ExtractErrorCode, type GroupId, type MatchResult, type PanelErrorCode,
+  type Provider, type Quota, type SectionEvent, type StageEvent, type StageId, type StageStatus,
 } from '../../lib/jd/types';
 
-// idle → extracting → streaming → done | error | cooldown; `paused` when the demo is switched off.
+// idle → extracting → streaming → done | error | cooldown.
+// `resting` replaces the input when the demo is switched off or today's cap is reached.
+
+const ACTIVITY_KEEP = 3;
 
 export interface StageState {
   status: StageStatus | 'pending';
+  /** Server-written, localized label of what this stage is doing / did. */
+  label?: string;
+  detail?: string;
+  /** Latest activity lines while running (newest last). */
+  activity: string[];
+  /** Total activity lines received, so each line keeps a stable key. */
+  activitySeq: number;
   ms?: number;
   provider?: Provider;
   model?: string;
@@ -22,7 +32,8 @@ export interface PanelError {
   /** Epoch ms before which a retry is pointless (FALLBACK_LIMITED). */
   retryAt: number | null;
 }
-export interface PanelInput { text: string; source: 'paste' | 'file'; truncated: boolean; }
+export interface PanelInput { text: string; source: 'paste' | 'file'; }
+export type RestReason = 'paused' | 'daily';
 
 export interface PanelState {
   phase: JdPhase;
@@ -35,9 +46,10 @@ export interface PanelState {
   result: MatchResult | null;
   error: PanelError | null;
   cooldownUntil: number | null;
-  dailyCapped: boolean;
+  /** The last 429 was a short "server busy" retry, not a per-visitor limit. */
+  cooldownBusy: boolean;
+  rest: RestReason | null;
   dailyLeft: number | null;
-  paused: boolean;
 }
 
 export type PanelAction =
@@ -45,16 +57,17 @@ export type PanelAction =
   | { type: 'extractFail'; code: ExtractErrorCode }
   | { type: 'start'; input: PanelInput }
   | { type: 'stage'; ev: StageEvent }
+  | { type: 'activity'; ev: ActivityEvent }
   | { type: 'section'; ev: SectionEvent }
   | { type: 'result'; result: MatchResult }
   | { type: 'fail'; error: PanelError }
-  | { type: 'rateLimited'; until: number }
-  | { type: 'paused' }
+  | { type: 'rateLimited'; until: number; busy: boolean }
+  | { type: 'rest'; reason: RestReason }
   | { type: 'quota'; quota: Quota; until: number | null }
   | { type: 'reset'; now: number };
 
 function freshStages(): Stages {
-  return Object.fromEntries(STAGE_IDS.map((id) => [id, { status: 'pending' }])) as Stages;
+  return Object.fromEntries(STAGE_IDS.map((id): [StageId, StageState] => [id, { status: 'pending', activity: [], activitySeq: 0 }])) as Stages;
 }
 
 export function initPanel(cooldownUntil: number): PanelState {
@@ -69,14 +82,29 @@ export function initPanel(cooldownUntil: number): PanelState {
     result: null,
     error: null,
     cooldownUntil: cooldownUntil || null,
-    dailyCapped: false,
+    cooldownBusy: false,
+    rest: null,
     dailyLeft: null,
-    paused: false,
   };
 }
 
-/** Phases where the input (dropzone / paste) is shown. */
-const INPUT_PHASES: JdPhase[] = ['idle', 'cooldown', 'paused'];
+/** Phases where no run is on screen, so a quota update may switch between them. */
+const IDLE_PHASES: JdPhase[] = ['idle', 'cooldown', 'resting'];
+
+function mergeStage(prev: StageState, ev: StageEvent): StageState {
+  const { status, ms, provider, model, meta, label, detail } = ev;
+  return {
+    ...prev,
+    status,
+    ms: ms ?? prev.ms,
+    provider: provider ?? prev.provider,
+    model: model ?? prev.model,
+    meta: meta ?? prev.meta,
+    // A later event without text keeps what the server said before.
+    label: label ?? prev.label,
+    detail: detail ?? prev.detail,
+  };
+}
 
 export function panelReducer(s: PanelState, a: PanelAction): PanelState {
   switch (a.type) {
@@ -91,12 +119,18 @@ export function panelReducer(s: PanelState, a: PanelAction): PanelState {
       };
     case 'stage': {
       if (s.phase !== 'streaming') return s;
-      const { stage, ...rest } = a.ev;
+      const { stage, status } = a.ev;
       return {
         ...s,
-        stages: { ...s.stages, [stage]: { ...s.stages[stage], ...rest } },
-        lastStage: { stage, status: a.ev.status },
+        stages: { ...s.stages, [stage]: mergeStage(s.stages[stage], a.ev) },
+        lastStage: { stage, status },
       };
+    }
+    case 'activity': {
+      if (s.phase !== 'streaming') return s;
+      const st = s.stages[a.ev.stage];
+      const activity = [...st.activity, a.ev.text].slice(-ACTIVITY_KEEP);
+      return { ...s, stages: { ...s.stages, [a.ev.stage]: { ...st, activity, activitySeq: st.activitySeq + 1 } } };
     }
     case 'section':
       if (s.phase !== 'streaming') return s;
@@ -114,21 +148,19 @@ export function panelReducer(s: PanelState, a: PanelAction): PanelState {
       return { ...s, phase: 'error', error: a.error, stages };
     }
     case 'rateLimited':
-      return { ...s, phase: 'cooldown', cooldownUntil: a.until, error: null };
-    case 'paused':
-      return { ...s, phase: 'paused', paused: true, error: null };
+      return { ...s, phase: 'cooldown', cooldownUntil: a.until, cooldownBusy: a.busy, error: null };
+    case 'rest':
+      return { ...s, phase: 'resting', rest: a.reason, error: null };
     case 'quota': {
-      const { paused } = a.quota;
-      const dailyCapped = a.quota.dailyLeft <= 0 && !a.quota.allowed;
-      const limited = a.until !== null || dailyCapped;
-      const next: JdPhase = paused ? 'paused' : limited ? 'cooldown' : 'idle';
-      const phase = INPUT_PHASES.includes(s.phase) ? next : s.phase;
-      return { ...s, phase, paused, cooldownUntil: a.until, dailyCapped, dailyLeft: a.quota.dailyLeft };
+      const rest: RestReason | null = a.quota.paused ? 'paused' : a.quota.dailyLeft <= 0 ? 'daily' : null;
+      const next: JdPhase = rest ? 'resting' : a.until !== null ? 'cooldown' : 'idle';
+      const phase = IDLE_PHASES.includes(s.phase) ? next : s.phase;
+      return { ...s, phase, rest, cooldownUntil: a.until, cooldownBusy: false, dailyLeft: a.quota.dailyLeft };
     }
     case 'reset': {
-      const limited = s.dailyCapped || (s.cooldownUntil !== null && s.cooldownUntil > a.now);
+      const cooling = s.cooldownUntil !== null && s.cooldownUntil > a.now;
       return {
-        ...s, phase: s.paused ? 'paused' : limited ? 'cooldown' : 'idle', fileName: null, inputError: null,
+        ...s, phase: s.rest ? 'resting' : cooling ? 'cooldown' : 'idle', fileName: null, inputError: null,
         error: null, result: null, stages: freshStages(), lastStage: null, sections: {},
       };
     }

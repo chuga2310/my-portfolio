@@ -51,19 +51,33 @@ export function PipelineTimeline({ t, stages }: Props) {
     <ol className="jd-timeline" aria-label={t.pipeline}>
       {STAGE_IDS.map((id) => {
         const s = stages[id];
-        const title = id === 'extract' ? s.meta?.title : undefined;
-        const reqs = id === 'extract' ? s.meta?.requirements : undefined;
+        const running = s.status === 'running';
         const switched = id !== 'route' && s.provider && routed && s.provider !== routed;
-        const routeReason = id === 'route' && s.status === 'failed' ? REASONS.find((r) => r === s.meta?.reason) : undefined;
+        // Second line: the server's detail; once the stage is over, its last activity line;
+        // older servers without labels fall back to what the meta says.
+        let detail = s.detail ?? (running ? undefined : s.activity.at(-1));
+        if (!detail && !s.label && id === 'extract' && s.meta?.title !== undefined) {
+          detail = fmt(t.extracted, { title: String(s.meta.title), n: Number(s.meta.requirements ?? 0) });
+        }
+        if (!detail && !s.label && id === 'route' && s.status === 'failed') {
+          const reason = REASONS.find((r) => r === s.meta?.reason);
+          if (reason) detail = t.provider.reasons[reason];
+        }
+        const firstSeq = s.activitySeq - s.activity.length;
         return (
           <li key={id} className={`jd-stage is-${s.status}`}>
             <span className="jd-stage-icon" aria-hidden="true">{ICON[s.status]}</span>
             <span className="jd-stage-body">
-              <span className="jd-stage-label">{t.stages[id]}</span>
-              {title !== undefined && (
-                <span className="jd-stage-meta">{fmt(t.extracted, { title: String(title), n: Number(reqs ?? 0) })}</span>
+              {/* Server text is rendered as text, never as HTML. */}
+              <span className="jd-stage-label">{s.label ?? t.stages[id]}</span>
+              {detail && <span className="jd-stage-detail">{detail}</span>}
+              {running && s.activity.length > 0 && (
+                <span className="jd-activity">
+                  {s.activity.map((line, i) => (
+                    <span key={firstSeq + i} className="jd-activity-line">{line}</span>
+                  ))}
+                </span>
               )}
-              {routeReason && <span className="jd-stage-meta">{t.provider.reasons[routeReason]}</span>}
               {switched && s.provider && (
                 <span className="jd-stage-meta switch">→ {providerName(s.provider, s.model, t)}</span>
               )}

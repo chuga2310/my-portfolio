@@ -72,6 +72,9 @@ data: StageEvent
 event: section
 data: SectionEvent
 
+event: activity
+data: ActivityEvent
+
 event: result
 data: MatchResult
 
@@ -91,6 +94,8 @@ type StageId =
 interface StageEvent {
   stage: StageId;
   status: "running" | "done" | "failed" | "skipped";
+  label: string;                       // what the AI is doing / just did, in the request `lang`
+  detail?: string;                     // optional second line (on "done": what it found)
   ms?: number;                         // duration, on "done"
   provider?: "self" | "openai";        // on stages that call a model, and on "route"
   model?: string;                      // display name, e.g. "Qwen3-4B (fine-tuned)"
@@ -98,7 +103,40 @@ interface StageEvent {
 }
 ```
 
-Stages arrive in the order listed. Labels are rendered by the frontend (i18n), not sent.
+Stages arrive in the order listed.
+
+**Labels come from the server, not the frontend.** Every `stage` event carries `label` (and optionally
+`detail`) written by the backend in the request `lang`, built from the **actual intermediate AI output
+of this run** — what is being processed right now and what was found. The frontend renders them
+verbatim; its own i18n stage names are only a fallback if `label` is missing. Examples (vi):
+
+| Stage | `running` label | `done` label / detail |
+|---|---|---|
+| `route` | "Đang kiểm tra máy chủ model cá nhân…" | "Dùng Qwen3-4B trên máy cá nhân" · or "Máy cá nhân offline → chuyển sang OpenAI" |
+| `normalize` | "Đang làm sạch JD, bỏ phần phúc lợi và giới thiệu công ty" | "JD tiếng Anh · giữ 1.820 ký tự nội dung chính" |
+| `extract` | "AI đang đọc JD và tách các yêu cầu…" | "Senior Fullstack Engineer · 14 yêu cầu" / "9 bắt buộc, 5 ưu tiên" |
+| `retrieve` | "Đang đối chiếu từng yêu cầu với CV…" | "Tìm được bằng chứng cho 12/14 yêu cầu" |
+| `evaluate` | "AI đang đánh giá theo từng nhóm…" | "9 khớp mạnh · 3 một phần · 2 chưa có" |
+| `score` | — | "Mức phù hợp ~82% · Good match" |
+| `write` | "AI đang viết nhận xét và chọn kinh nghiệm nổi bật…" | "Đã chọn 4 kinh nghiệm nổi bật" |
+
+### ActivityEvent
+
+Fine-grained progress lines while a stage is `running`, emitted as the model's output arrives
+(streamed where the provider supports it, otherwise right after each call returns). The frontend shows
+the latest 1–3 lines under the running stage.
+
+```ts
+interface ActivityEvent {
+  stage: StageId;
+  text: string;     // ≤ 120 chars, request `lang`, e.g. "Tìm thấy yêu cầu bắt buộc: 3+ năm React"
+}
+```
+
+Examples: `extract` → one line per requirement as it is parsed; `retrieve` → "'Kubernetes' → gần nhất:
+GCP Cloud Run (Afforai)"; `evaluate` → "Kỹ năng: React ✓ mạnh · Kubernetes ~ chuyển đổi được".
+Rate: at most ~4 per second and ~40 per run. Texts never contain internal hostnames, raw model
+errors, or anything not derived from the JD, the CV knowledge base, or this run's results.
 
 - `route` done: `provider` is the provider chosen for this run; when it is `"openai"`,
   `meta.reason` is `"offline" | "busy" | "not_configured"`.

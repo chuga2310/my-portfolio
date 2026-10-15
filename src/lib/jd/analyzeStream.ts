@@ -1,7 +1,7 @@
 import { API_BASE } from './config';
 import {
-  GROUP_IDS, STAGE_IDS,
-  type AnalyzeRequest, type ClientErrorCode, type ErrorEvent, type HttpErrorCode,
+  BODY_MAX_BYTES, GROUP_IDS, STAGE_IDS,
+  type ActivityEvent, type AnalyzeRequest, type ClientErrorCode, type ErrorEvent, type HttpErrorCode,
   type MatchResult, type SectionEvent, type StageEvent,
 } from './types';
 
@@ -10,6 +10,7 @@ import {
 export type AnalyzeEvent =
   | { type: 'stage'; data: StageEvent }
   | { type: 'section'; data: SectionEvent }
+  | { type: 'activity'; data: ActivityEvent }
   | { type: 'result'; data: MatchResult }
   | { type: 'error'; data: ErrorEvent };
 
@@ -95,14 +96,31 @@ export async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator
   }
 }
 
+const isStage = (v: unknown) => (STAGE_IDS as readonly unknown[]).includes(v);
+
+/** Server text is rendered as plain text; this only bounds it so a bad payload cannot wreck the layout. */
+function plain(v: unknown, max: number): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const s = v.replace(/\s+/g, ' ').trim();
+  return s ? s.slice(0, max) : undefined;
+}
+
+/** Unknown event types and malformed payloads are ignored. */
 function parse(msg: SseMessage): AnalyzeEvent | null {
   let data: unknown;
   try { data = JSON.parse(msg.data); } catch { return null; }
   if (!data || typeof data !== 'object') return null;
   const d = data as Record<string, unknown>;
   switch (msg.event) {
-    case 'stage':
-      return (STAGE_IDS as readonly unknown[]).includes(d.stage) ? { type: 'stage', data: d as unknown as StageEvent } : null;
+    case 'stage': {
+      if (!isStage(d.stage)) return null;
+      const ev = { ...d, label: plain(d.label, 160), detail: plain(d.detail, 200) } as unknown as StageEvent;
+      return { type: 'stage', data: ev };
+    }
+    case 'activity': {
+      const text = plain(d.text, 160);
+      return isStage(d.stage) && text ? { type: 'activity', data: { stage: d.stage as ActivityEvent['stage'], text } } : null;
+    }
     case 'section':
       return (GROUP_IDS as readonly unknown[]).includes(d.group) ? { type: 'section', data: d as unknown as SectionEvent } : null;
     case 'result':
@@ -124,13 +142,15 @@ export async function analyzeStream(
   signal: AbortSignal,
 ): Promise<void> {
   if (!API_BASE) throw new AnalyzeError('NOT_CONFIGURED');
+  const body = JSON.stringify(req);
+  if (new TextEncoder().encode(body).length > BODY_MAX_BYTES) throw new AnalyzeError('PAYLOAD_TOO_LARGE');
 
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-      body: JSON.stringify(req),
+      body,
       credentials: 'omit',
       cache: 'no-store',
       signal,

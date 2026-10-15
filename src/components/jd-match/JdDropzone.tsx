@@ -137,6 +137,7 @@ export function JdDropzone({ t, tab, onTab, pasteText, onPasteText, onFile, onSu
         <div className="jd-paste-row">
           <span id="jd-paste-count" className={`jd-count${len > TEXT_MAX ? ' over' : ''}`}>
             {fmt(t.paste.count, { n: len.toLocaleString(locale), max: TEXT_MAX.toLocaleString(locale) })}
+            {len > 0 && len < TEXT_MIN && <> · {fmt(t.paste.min, { min: TEXT_MIN })}</>}
           </span>
           <button type="button" className="btn primary jd-btn" disabled={!canSubmit} onClick={onSubmitText}>
             {t.analyze} <span className="arrow">→</span>

@@ -18,7 +18,12 @@
 //   internal  the gateway loses the AI service mid-stream and appends INTERNAL (quota refunded)
 //   limited   personal machine offline and no OpenAI quota left: `route` fails, FALLBACK_LIMITED
 //   paused    503 DEMO_PAUSED, and GET /quota reports paused for the next 60s
-//   400 | 403 | 413 | 429 | 502 | 503   the matching JSON error, before any stream (429 also starts a 30s cooldown)
+//   cap       503 DAILY_CAP_REACHED, and GET /quota reports dailyLeft 0 for the next 60s (also `503`)
+//   busy      429 RATE_LIMITED with a short retryAfterSec (server busy, not a visitor limit)
+//   400 | 403 | 413 | 429 | 502   the matching JSON error, before any stream (429 also starts a 30s cooldown)
+// Every stage event carries a server-style `label` (+ `detail` when done) in the request lang, and
+// `activity` lines stream under the running stage. One unknown event type is sent to test that
+// clients ignore it.
 // The same JD sent twice within 24h replays from cache (fast, cached: true, no quota).
 
 import { createServer } from 'node:http';
@@ -30,9 +35,10 @@ const COOLDOWN_SEC = Number(process.env.MOCK_COOLDOWN_SEC || 0);
 const SPEED = Math.max(0.1, Number(process.env.MOCK_SPEED || 1));
 const DAILY_CAP = 50;
 const FORCED_COOLDOWN_SEC = 30; // `mock:429`
+const BUSY_RETRY_SEC = 8; // `mock:busy`
 const ALLOWED_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const VARIANTS = [
-  'self', 'openai', 'fallback', 'error', 'timeout', 'drop', 'internal', 'limited', 'paused',
+  'self', 'openai', 'fallback', 'error', 'timeout', 'drop', 'internal', 'limited', 'paused', 'cap', 'busy',
   '400', '403', '413', '429', '502', '503',
 ];
 const GROUPS = ['skills', 'experience', 'responsibilities', 'domain', 'extras'];
@@ -41,10 +47,12 @@ const SELF_MODEL = 'Qwen3-4B (fine-tuned)';
 const OPENAI_MODEL = 'gpt-4.1-mini';
 
 const nextAllowed = new Map(); // ip -> epoch ms
-const cache = new Map(); // sha256(text|lang) -> { at, events }
+const cache = new Map(); // sha256(text|lang) -> { at, run: { events, lang } }
 let usedToday = 0;
 let pausedUntil = process.env.MOCK_PAUSED === '1' ? Infinity : 0;
+let capUntil = 0;
 const isPaused = () => Date.now() < pausedUntil;
+const isCapped = () => Date.now() < capUntil;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms / SPEED));
 const jitter = (ms) => Math.round(ms * (0.75 + Math.random() * 0.5));
@@ -67,7 +75,7 @@ function json(res, status, body) {
 
 function quotaFor(ip) {
   const wait = Math.max(0, Math.ceil(((nextAllowed.get(ip) || 0) - Date.now()) / 1000));
-  const dailyLeft = Math.max(0, DAILY_CAP - usedToday);
+  const dailyLeft = isCapped() ? 0 : Math.max(0, DAILY_CAP - usedToday);
   const paused = isPaused();
   return { allowed: wait === 0 && dailyLeft > 0 && !paused, retryAfterSec: wait, dailyLeft, paused };
 }
@@ -192,6 +200,74 @@ function analyze(text, lang) {
   };
 }
 
+// ── Server-written stage labels (the frontend renders these verbatim) ───────
+
+const GROUP_NAME = {
+  vi: { skills: 'Kỹ năng', experience: 'Kinh nghiệm', responsibilities: 'Trách nhiệm', domain: 'Lĩnh vực', extras: 'Khác' },
+  en: { skills: 'Skills', experience: 'Experience', responsibilities: 'Responsibilities', domain: 'Domain', extras: 'Extras' },
+};
+const LEVEL_MARK = {
+  vi: { strong: '✓ mạnh', partial: '~ một phần', transferable: '~ chuyển đổi được', gap: '✗ chưa có' },
+  en: { strong: '✓ strong', partial: '~ partial', transferable: '~ transferable', gap: '✗ missing' },
+};
+const TIER_NAME = { strong: 'Strong match', good: 'Good match', partial: 'Partial match', stretch: 'Stretch' };
+const num = (lang, n) => n.toLocaleString(lang === 'vi' ? 'vi-VN' : 'en-US');
+
+const COPY = {
+  vi: {
+    accepted: 'Đã nhận JD, bắt đầu phân tích',
+    acceptedCached: 'JD này vừa được phân tích, phát lại kết quả đã lưu',
+    routeRun: 'Đang kiểm tra máy chủ model cá nhân…',
+    routeSelf: 'Dùng Qwen3-4B trên máy cá nhân',
+    routeOpenai: 'Máy cá nhân offline → chuyển sang OpenAI',
+    routeLimited: 'Máy cá nhân offline, chưa thể dùng model dự phòng',
+    normRun: 'Đang làm sạch JD, bỏ phần phúc lợi và giới thiệu công ty',
+    normDone: (jdLang, n) => `JD ${jdLang === 'vi' ? 'tiếng Việt' : 'tiếng Anh'} · giữ ${n} ký tự nội dung chính`,
+    extractRun: 'AI đang đọc JD và tách các yêu cầu…',
+    extractDone: (title, n) => `${title} · ${n} yêu cầu`,
+    extractDetail: (must, other) => `${must} bắt buộc, ${other} ưu tiên`,
+    extractLine: (req, must) => `Tìm thấy yêu cầu ${must ? 'bắt buộc' : 'ưu tiên'}: ${req}`,
+    retrieveRun: 'Đang đối chiếu từng yêu cầu với CV…',
+    retrieveDone: (k, n) => `Tìm được bằng chứng cho ${k}/${n} yêu cầu`,
+    retrieveLine: (req, ev) => `'${req}' → gần nhất: ${ev}`,
+    retrieveNone: (req) => `'${req}' → chưa thấy bằng chứng trực tiếp`,
+    evalRun: 'AI đang đánh giá theo từng nhóm…',
+    evalFallback: 'Máy cá nhân phản hồi chậm → chuyển phần đánh giá sang OpenAI',
+    evalDone: (s, p, g) => `${s} khớp mạnh · ${p} một phần · ${g} chưa có`,
+    scoreDone: (o, tier) => `Mức phù hợp ~${o}% · ${tier}`,
+    writeRun: 'AI đang viết nhận xét và chọn kinh nghiệm nổi bật…',
+    writeLine: (label) => `Chọn làm nổi bật: ${label}`,
+    writeDone: (n) => `Đã chọn ${n} kinh nghiệm nổi bật`,
+    done: 'Hoàn tất phân tích',
+  },
+  en: {
+    accepted: 'JD received, starting the analysis',
+    acceptedCached: 'This JD was analyzed recently, replaying the saved result',
+    routeRun: 'Checking the personal model server…',
+    routeSelf: 'Using Qwen3-4B on the personal machine',
+    routeOpenai: 'Personal machine offline → switching to OpenAI',
+    routeLimited: 'Personal machine offline, backup model not available yet',
+    normRun: 'Cleaning up the JD, dropping benefits and company intro',
+    normDone: (jdLang, n) => `${jdLang === 'vi' ? 'Vietnamese' : 'English'} JD · kept ${n} characters of core content`,
+    extractRun: 'AI is reading the JD and splitting out requirements…',
+    extractDone: (title, n) => `${title} · ${n} requirements`,
+    extractDetail: (must, other) => `${must} must-have, ${other} nice-to-have`,
+    extractLine: (req, must) => `Found ${must ? 'must-have' : 'nice-to-have'}: ${req}`,
+    retrieveRun: 'Matching each requirement against the CV…',
+    retrieveDone: (k, n) => `Found evidence for ${k}/${n} requirements`,
+    retrieveLine: (req, ev) => `'${req}' → closest: ${ev}`,
+    retrieveNone: (req) => `'${req}' → no direct evidence yet`,
+    evalRun: 'AI is evaluating each group…',
+    evalFallback: 'Personal machine is slow → moving the evaluation to OpenAI',
+    evalDone: (s, p, g) => `${s} strong · ${p} partial · ${g} missing`,
+    scoreDone: (o, tier) => `Match ~${o}% · ${tier}`,
+    writeRun: 'AI is writing the summary and picking standout experience…',
+    writeLine: (label) => `Highlighting: ${label}`,
+    writeDone: (n) => `Picked ${n} standout experiences`,
+    done: 'Analysis complete',
+  },
+};
+
 // ── SSE ──────────────────────────────────────────────────────────────────────
 
 function sse(res, event, data) {
@@ -200,96 +276,151 @@ function sse(res, event, data) {
 
 async function runStream(res, { text, lang, variant, signal, jobId }) {
   const a = analyze(text, lang);
+  const c = COPY[lang];
   const first = variant === 'openai' ? 'openai' : 'self';
   const model = (p) => (p === 'self' ? SELF_MODEL : OPENAI_MODEL);
   const slow = first === 'self' ? 1.6 : 1; // the personal machine is slower than OpenAI
   const events = [];
   const emit = (event, data) => { if (!signal.aborted) { sse(res, event, data); events.push([event, data]); } };
+  const activity = async (stage, lines, gap) => {
+    for (const textLine of lines) {
+      await sleep(jitter(gap));
+      emit('activity', { stage, text: textLine });
+    }
+  };
   const total = () => events.filter(([e, d]) => e === 'stage' && d.status === 'done').reduce((sum, [, d]) => sum + (d.ms || 0), 0);
-  const stage = async (id, ms, extra = {}, { run, meta, onlyDone } = {}) => {
-    if (!onlyDone) emit('stage', { stage: id, status: 'running', ...extra });
+  // One stage: `running` (unless onlyDone), the work (run or a sleep), then `done` with its label/detail.
+  const stage = async (id, { label, doneLabel, detail, ms = 0, extra = {}, meta, onlyDone, run } = {}) => {
+    if (!onlyDone) emit('stage', { stage: id, status: 'running', label, ...extra });
     const t0 = Date.now();
     if (run) await run();
     else await sleep(ms);
-    emit('stage', { stage: id, status: 'done', ms: Math.round((Date.now() - t0) * SPEED), ...extra, ...(meta ? { meta } : {}) });
+    emit('stage', {
+      stage: id, status: 'done', label: doneLabel ?? label, ...(detail ? { detail } : {}),
+      ms: Math.round((Date.now() - t0) * SPEED), ...extra, ...(meta ? { meta } : {}),
+    });
   };
-  const fail = async (id, error, extra = {}, meta) => {
-    emit('stage', { stage: id, status: 'running', ...extra });
-    await sleep(jitter(1400));
-    emit('stage', { stage: id, status: 'failed', ...extra, ...(meta ? { meta } : {}) });
+  const fail = async (id, label, error, extra = {}, meta) => {
+    emit('stage', { stage: id, status: 'failed', label, ...extra, ...(meta ? { meta } : {}) });
     emit('error', error);
     return null;
   };
+  const all = [...a.result.matched, ...a.result.gaps];
 
-  await stage('accepted', 40, {}, { onlyDone: true, meta: { jobId } });
+  await stage('accepted', { label: c.accepted, ms: 40, onlyDone: true, meta: { jobId } });
+  emit('telemetry', { note: 'unknown event types must be ignored by the client' });
+
+  emit('stage', { stage: 'route', status: 'running', label: c.routeRun });
+  await sleep(jitter(500));
   if (variant === 'limited') {
-    return fail('route', { code: 'FALLBACK_LIMITED', retryable: true, retryAfterSec: 120 }, {}, { reason: 'offline' });
+    return fail('route', c.routeLimited, { code: 'FALLBACK_LIMITED', retryable: true, retryAfterSec: 120 }, {}, { reason: 'offline' });
   }
-  emit('stage', { stage: 'route', status: 'running' });
-  await sleep(jitter(350));
   emit('stage', {
-    stage: 'route', status: 'done', ms: 340, provider: first, model: model(first),
-    ...(first === 'openai' ? { meta: { reason: 'offline' } } : {}),
+    stage: 'route', status: 'done', label: first === 'self' ? c.routeSelf : c.routeOpenai,
+    ms: 480, provider: first, model: model(first), ...(first === 'openai' ? { meta: { reason: 'offline' } } : {}),
   });
-  await stage('normalize', jitter(180), {}, { meta: { lang: a.textLang, chars: text.length } });
-  await stage('extract', jitter(1300 * slow), { provider: first, model: model(first) },
-    { meta: { title: a.title, requirements: a.requirements } });
-  await stage('retrieve', jitter(420), {}, { meta: { chunks: 12 + (text.length % 9) } });
+
+  const kept = Math.round(text.length * 0.82);
+  await stage('normalize', {
+    label: c.normRun, doneLabel: c.normDone(a.textLang, num(lang, kept)), ms: jitter(260),
+    meta: { lang: a.textLang, chars: kept },
+  });
+
+  const must = all.filter((v) => v.kind === 'must').length;
+  await stage('extract', {
+    label: c.extractRun,
+    doneLabel: c.extractDone(a.title, a.requirements),
+    detail: c.extractDetail(must, a.requirements - must),
+    extra: { provider: first, model: model(first) },
+    meta: { title: a.title, requirements: a.requirements },
+    run: () => activity('extract', all.map((v) => c.extractLine(v.requirement, v.kind === 'must')), 1500 * slow / all.length + 120),
+  });
+
+  const withEvidence = all.filter((v) => v.evidence.length > 0);
+  await stage('retrieve', {
+    label: c.retrieveRun,
+    doneLabel: c.retrieveDone(withEvidence.length, all.length),
+    meta: { chunks: 12 + (text.length % 9) },
+    run: () => activity('retrieve', all.slice(0, 4).map((v) => (v.evidence[0]
+      ? c.retrieveLine(v.requirement, v.evidence[0].label)
+      : c.retrieveNone(v.requirement))), 160),
+  });
 
   if (variant === 'drop') {
-    emit('stage', { stage: 'evaluate', status: 'running', provider: first, model: model(first) });
+    emit('stage', { stage: 'evaluate', status: 'running', label: c.evalRun, provider: first, model: model(first) });
     await sleep(1200);
     res.destroy();
     return null;
   }
-  if (variant === 'error') {
-    return fail('evaluate', { code: 'LLM_UNAVAILABLE', retryable: true }, { provider: first, model: model(first) });
-  }
-
   const evalProvider = variant === 'fallback' ? 'openai' : first;
   const evalModel = { provider: evalProvider, model: model(evalProvider) };
-  const sectionsUpTo = async (n) => {
+  const groupLines = async (n) => {
     for (const g of a.groupOrder.slice(0, n)) {
-      await sleep(jitter(650 * (evalProvider === 'self' ? slow : 1)));
+      await sleep(jitter(420 * (evalProvider === 'self' ? slow : 1)));
+      const vs = all.filter((v) => v.group === g).slice(0, 2);
+      if (vs.length) {
+        const line = `${GROUP_NAME[lang][g]}: ${vs.map((v) => `${v.requirement} ${LEVEL_MARK[lang][v.level]}`).join(' · ')}`;
+        emit('activity', { stage: 'evaluate', text: line.slice(0, 120) });
+      }
+      await sleep(jitter(220));
       emit('section', { group: g, score: a.sections[g], ...a.counts[g] });
     }
   };
-  if (variant === 'internal') {
-    // The gateway lost the AI service mid-stream: stage failed, then INTERNAL (quota refunded).
-    emit('stage', { stage: 'evaluate', status: 'running', ...evalModel });
-    await sectionsUpTo(2);
-    await sleep(800);
-    emit('stage', { stage: 'evaluate', status: 'failed', ...evalModel });
-    emit('error', { code: 'INTERNAL', retryable: true });
-    return null;
+  if (variant === 'error' || variant === 'internal') {
+    // The model stops answering (error) or the gateway loses the AI service (internal): stage failed, quota refunded.
+    emit('stage', { stage: 'evaluate', status: 'running', label: c.evalRun, ...evalModel });
+    await groupLines(2);
+    await sleep(900);
+    return fail('evaluate', c.evalRun, { code: variant === 'error' ? 'LLM_UNAVAILABLE' : 'INTERNAL', retryable: true }, evalModel);
   }
-  await stage('evaluate', 0, evalModel, {
+  const levels = { strong: 0, partial: 0, transferable: 0, gap: 0 };
+  all.forEach((v) => { levels[v.level]++; });
+  await stage('evaluate', {
+    label: c.evalRun,
+    doneLabel: c.evalDone(levels.strong, levels.partial + levels.transferable, levels.gap),
+    extra: evalModel,
     run: async () => {
-      if (variant === 'fallback') await sleep(1500); // personal machine stalls, gateway switches
-      await sectionsUpTo(GROUPS.length);
+      if (variant === 'fallback') {
+        await sleep(1500); // the personal machine stalls; the gateway re-runs the call on OpenAI
+        emit('stage', { stage: 'evaluate', status: 'running', label: c.evalFallback, ...evalModel });
+      }
+      await groupLines(GROUPS.length);
     },
   });
-  await stage('score', jitter(90), {}, {
-    onlyDone: true,
-    meta: { overall: a.result.overall, tier: a.result.tier, verdicts: a.result.matched.length + a.result.gaps.length },
-  });
-  if (variant === 'timeout') return fail('write', { code: 'TIMEOUT', retryable: false }, evalModel);
-  await stage('write', jitter(1200 * slow), evalModel);
 
-  emit('stage', { stage: 'done', status: 'done', ms: total() });
-  emit('result', { jobId, cached: false, provider: evalProvider, model: model(evalProvider), ...a.result });
-  return events;
+  const r = a.result;
+  await stage('score', {
+    label: c.scoreDone(r.overall, TIER_NAME[r.tier]), ms: jitter(90), onlyDone: true,
+    meta: { overall: r.overall, tier: r.tier, verdicts: all.length },
+  });
+  if (variant === 'timeout') {
+    emit('stage', { stage: 'write', status: 'running', label: c.writeRun, ...evalModel });
+    await sleep(jitter(1600));
+    return fail('write', c.writeRun, { code: 'TIMEOUT', retryable: false }, evalModel);
+  }
+  await stage('write', {
+    label: c.writeRun,
+    doneLabel: c.writeDone(r.highlights.length),
+    extra: evalModel,
+    run: () => activity('write', r.highlights.slice(0, 3).map((h) => c.writeLine(h.label)), 1100 * slow / 3),
+  });
+
+  emit('stage', { stage: 'done', status: 'done', label: c.done, ms: total() });
+  emit('result', { jobId, cached: false, provider: evalProvider, model: model(evalProvider), ...r });
+  return { events, lang };
 }
 
-async function replay(res, events, signal) {
+async function replay(res, run, signal) {
   const jobId = `job_${Date.now().toString(36)}`;
-  for (const [event, data] of events) {
+  for (const [event, data] of run.events) {
     if (signal.aborted) return;
     let out = data;
     if (event === 'result') out = { ...data, jobId, cached: true };
-    else if (event === 'stage' && data.stage === 'accepted') out = { ...data, meta: { jobId, cached: true } };
+    else if (event === 'stage' && data.stage === 'accepted') {
+      out = { ...data, label: COPY[run.lang].acceptedCached, meta: { jobId, cached: true } };
+    }
     sse(res, event, out);
-    await sleep(35);
+    await sleep(event === 'activity' ? 12 : 35);
   }
 }
 
@@ -328,7 +459,9 @@ const server = createServer(async (req, res) => {
     if (variant === '400' || text.length < 50 || text.length > 15000) { json(res, 400, { error: 'INVALID_INPUT' }); return; }
     if (variant === '403') { json(res, 403, { error: 'BOT_CHECK_FAILED' }); return; }
     if (variant === '502') { json(res, 502, { error: 'UPSTREAM_UNAVAILABLE' }); return; }
-    if (variant === '503' || usedToday >= DAILY_CAP) { json(res, 503, { error: 'DAILY_CAP_REACHED' }); return; }
+    if (variant === 'cap' || variant === '503') capUntil = Date.now() + 60_000;
+    if (isCapped() || usedToday >= DAILY_CAP) { json(res, 503, { error: 'DAILY_CAP_REACHED' }); return; }
+    if (variant === 'busy') { json(res, 429, { error: 'RATE_LIMITED', retryAfterSec: BUSY_RETRY_SEC }); return; }
 
     const key = createHash('sha256').update(`${lang}|${text}`).digest('hex');
     const hit = cache.get(key);
@@ -347,13 +480,13 @@ const server = createServer(async (req, res) => {
     const ping = setInterval(() => res.write(': ping\n\n'), 10_000);
     try {
       if (fresh) {
-        await replay(res, hit.events, ac.signal);
+        await replay(res, hit.run, ac.signal);
       } else {
         usedToday++;
         if (COOLDOWN_SEC > 0) nextAllowed.set(ip, Date.now() + COOLDOWN_SEC * 1000);
         const jobId = `job_${Date.now().toString(36)}`;
-        const events = await runStream(res, { text, lang, variant, signal: ac.signal, jobId });
-        if (events) cache.set(key, { at: Date.now(), events });
+        const run = await runStream(res, { text, lang, variant, signal: ac.signal, jobId });
+        if (run) cache.set(key, { at: Date.now(), run });
         else if (['error', 'internal', 'limited'].includes(variant)) { usedToday--; nextAllowed.delete(ip); } // refunded
       }
     } finally {

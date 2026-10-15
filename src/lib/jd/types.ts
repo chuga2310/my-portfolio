@@ -12,10 +12,20 @@ export type RouteReason = 'offline' | 'busy' | 'not_configured';
 export interface StageEvent {
   stage: StageId;
   status: StageStatus;
+  /** What the AI is doing / just did, localized by the server. Plain text. */
+  label?: string;
+  /** Optional second line (on "done": what it found). Plain text. */
+  detail?: string;
   ms?: number;
   provider?: Provider;
   model?: string;
   meta?: Record<string, string | number | boolean>;
+}
+
+/** Fine-grained progress line while a stage is running. Plain text, ≤ 120 chars. */
+export interface ActivityEvent {
+  stage: StageId;
+  text: string;
 }
 
 export const GROUP_IDS = ['skills', 'experience', 'responsibilities', 'domain', 'extras'] as const;
@@ -98,7 +108,10 @@ export type ClientErrorCode = 'NETWORK' | 'INCOMPLETE' | 'NOT_CONFIGURED';
 
 export type PanelErrorCode = Exclude<HttpErrorCode, 'RATE_LIMITED' | 'DEMO_PAUSED'> | StreamErrorCode | ClientErrorCode;
 
-export type ExtractErrorCode = 'unsupported' | 'too_large' | 'no_text' | 'too_short' | 'read_failed';
+export type ExtractErrorCode = 'unsupported' | 'too_large' | 'no_text' | 'too_short' | 'too_long' | 'read_failed';
 
-export const TEXT_MIN = 50;
+/** Client-side limits, checked before calling the API (the gateway accepts 50..15000). */
+export const TEXT_MIN = 200;
 export const TEXT_MAX = 15000;
+/** The gateway rejects request bodies above 64 KB with 413. */
+export const BODY_MAX_BYTES = 64 * 1024;

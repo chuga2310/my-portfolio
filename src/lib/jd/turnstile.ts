@@ -1,7 +1,8 @@
 import { TURNSTILE_ENABLED, TURNSTILE_SITEKEY } from './config';
 
-// Cloudflare Turnstile, rendered on demand. The script is injected the first time the
-// panel is used, so visitors who never touch it never load it.
+// Cloudflare Turnstile (Managed mode), rendered on demand. The script is injected the first time
+// the panel is used, so visitors who never touch it never load it. Tokens are single-use: every
+// analysis resets the widget and executes it again for a fresh token. Nothing retries on its own.
 
 interface TurnstileApi {
   render(el: HTMLElement, opts: Record<string, unknown>): string;
@@ -15,10 +16,11 @@ declare global {
 }
 
 const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-const TOKEN_TIMEOUT_MS = 30_000;
+const ACTION = 'analyze_jd';
+const TOKEN_TIMEOUT_MS = 120_000; // a Managed challenge may need the visitor to click
 
 let scriptPromise: Promise<TurnstileApi> | null = null;
-let widget: { id: string; host: HTMLElement } | null = null;
+let widget: { id: string; host: HTMLElement; lang: string } | null = null;
 let settle: ((token: string | null) => void) | null = null;
 
 function loadScript(): Promise<TurnstileApi> {
@@ -58,7 +60,7 @@ export async function getTurnstileToken(host: HTMLElement, lang: 'vi' | 'en'): P
       else reject(new Error('turnstile'));
     };
 
-    if (widget && widget.host !== host) {
+    if (widget && (widget.host !== host || widget.lang !== lang)) {
       ts.remove(widget.id);
       widget = null;
     }
@@ -66,14 +68,17 @@ export async function getTurnstileToken(host: HTMLElement, lang: 'vi' | 'en'): P
       const id = ts.render(host, {
         sitekey: TURNSTILE_SITEKEY,
         execution: 'execute',
-        appearance: 'interaction-only',
+        action: ACTION,
+        appearance: 'interaction-only', // invisible unless Managed mode asks for a click
         language: lang,
+        retry: 'never',
         'refresh-expired': 'manual',
+        'refresh-timeout': 'manual',
         callback: (token: string) => settle?.(token),
         'error-callback': () => { settle?.(null); return true; },
         'timeout-callback': () => settle?.(null),
       });
-      widget = { id, host };
+      widget = { id, host, lang };
     } else {
       ts.reset(widget.id);
     }

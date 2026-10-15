@@ -34,15 +34,15 @@ export interface EduInfo { school: string; degree: string; years: string; gpa: s
 export interface AwardsContent { label: string; title: string; awards: AwardItem[]; edu: EduInfo; }
 export interface ContactLink { k: string; v: string; href: string | null; }
 export interface ContactContent { label: string; title: string; sub: string; email: string; phone: string; links: ContactLink[]; cta: string; foot: string; }
-export type JdPhase = 'idle' | 'extracting' | 'streaming' | 'done' | 'error' | 'cooldown' | 'paused';
+export type JdPhase = 'idle' | 'extracting' | 'streaming' | 'done' | 'error' | 'cooldown' | 'resting';
 /** Strings may contain `{name}` placeholders, filled by `fmt()` in lib/jd/format.ts. */
 export interface JdContent {
   kicker: string; title: string; sub: string;
   phase: Record<JdPhase, string>;
   tabs: { label: string; file: string; paste: string };
   drop: { title: string; hint: string; browse: string; reading: string; pasteInstead: string };
-  paste: { label: string; placeholder: string; count: string };
-  analyze: string; again: string; retry: string; back: string; truncated: string;
+  paste: { label: string; placeholder: string; count: string; min: string };
+  analyze: string; again: string; retry: string; back: string; verifying: string;
   pipeline: string; pipelineTotal: string; extracted: string;
   stages: Record<StageId, string>;
   status: Record<StageStatus | 'pending', string>;
@@ -54,9 +54,9 @@ export interface JdContent {
     score: string; matched: string; gaps: string; evidence: string; highlight: string;
     highlightHint: string; noGaps: string; cached: string; showAll: string; showLess: string;
   };
-  cooldown: { title: string; next: string; daily: string; left: string };
-  paused: { title: string; body: string; cv: string; contact: string };
-  retryIn: string;
+  cooldown: { title: string; busy: string; next: string; left: string };
+  rest: { title: string; paused: string; daily: string; cv: string; contact: string };
+  retryIn: string; fallbackWait: string;
   errors: Record<PanelErrorCode | ExtractErrorCode, string>;
   refunded: string;
   privacy: string;

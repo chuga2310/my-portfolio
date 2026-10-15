@@ -18,14 +18,20 @@ export class ExtractError extends Error {
   }
 }
 
-export interface Extracted { text: string; truncated: boolean; }
 
+const KIND_BY_EXT: Record<string, FileKind> = { pdf: 'pdf', docx: 'docx', txt: 'text', md: 'text' };
+const KIND_BY_MIME: Record<string, FileKind> = {
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'text/plain': 'text',
+  'text/markdown': 'text',
+};
+
+/** The extension decides when there is one; the MIME type only for files without an extension. */
 function kindOf(file: File): FileKind | null {
-  const ext = file.name.toLowerCase().split('.').pop() ?? '';
-  if (ext === 'pdf' || file.type === 'application/pdf') return 'pdf';
-  if (ext === 'docx' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
-  if (ext === 'txt' || ext === 'md' || file.type === 'text/plain' || file.type === 'text/markdown') return 'text';
-  return null;
+  const dot = file.name.lastIndexOf('.');
+  if (dot > 0) return KIND_BY_EXT[file.name.slice(dot + 1).toLowerCase()] ?? null;
+  return KIND_BY_MIME[file.type] ?? null;
 }
 
 export function normalizeText(raw: string): string {
@@ -37,9 +43,11 @@ export function normalizeText(raw: string): string {
     .trim();
 }
 
-export function clampText(text: string): Extracted {
-  const truncated = text.length > TEXT_MAX;
-  return { text: truncated ? text.slice(0, TEXT_MAX) : text, truncated };
+/** Client-side length check, before anything is sent. */
+export function checkLength(text: string): ExtractErrorCode | null {
+  if (text.length < TEXT_MIN) return 'too_short';
+  if (text.length > TEXT_MAX) return 'too_long';
+  return null;
 }
 
 async function readPdf(file: File): Promise<string> {
@@ -53,7 +61,7 @@ async function readPdf(file: File): Promise<string> {
     const doc = await task.promise;
     let out = '';
     const pages = Math.min(doc.numPages, MAX_PDF_PAGES);
-    for (let i = 1; i <= pages && out.length < TEXT_MAX; i++) {
+    for (let i = 1; i <= pages && out.length <= TEXT_MAX * 2; i++) {
       const page = await doc.getPage(i);
       const content = await page.getTextContent();
       for (const item of content.items) {
@@ -74,7 +82,7 @@ async function readDocx(file: File): Promise<string> {
   return value;
 }
 
-export async function extractText(file: File): Promise<Extracted> {
+export async function extractText(file: File): Promise<string> {
   const kind = kindOf(file);
   if (!kind) throw new ExtractError('unsupported');
   if (file.size > MAX_FILE_BYTES) throw new ExtractError('too_large');
@@ -90,6 +98,8 @@ export async function extractText(file: File): Promise<Extracted> {
 
   const text = normalizeText(raw);
   // A PDF with (almost) no text layer is most likely a scan.
-  if (text.length < TEXT_MIN) throw new ExtractError(kind === 'pdf' ? 'no_text' : 'too_short');
-  return clampText(text);
+  if (kind === 'pdf' && text.length < 50) throw new ExtractError('no_text');
+  const problem = checkLength(text);
+  if (problem) throw new ExtractError(problem);
+  return text;
 }
