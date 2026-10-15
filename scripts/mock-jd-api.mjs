@@ -15,16 +15,18 @@
 //   error     stream fails during `evaluate` with LLM_UNAVAILABLE (quota refunded)
 //   timeout   stream fails during `write` with TIMEOUT (quota not refunded)
 //   drop      connection closes mid-stream without a result
-//   internal  the gateway loses the AI service mid-stream and appends INTERNAL (quota refunded)
+//   internal  the gateway loses the AI service mid-stream and appends INTERNAL (not refunded)
 //   limited   personal machine offline and no OpenAI quota left: `route` fails, FALLBACK_LIMITED
 //   paused    503 DEMO_PAUSED, and GET /quota reports paused for the next 60s
 //   cap       503 DAILY_CAP_REACHED, and GET /quota reports dailyLeft 0 for the next 60s (also `503`)
 //   busy      429 RATE_LIMITED with a short retryAfterSec (server busy, not a visitor limit)
-//   400 | 403 | 413 | 429 | 502   the matching JSON error, before any stream (429 also starts a 30s cooldown)
+//   400 | 403 | 413 | 429 | 502   the matching JSON error, before any stream (429 also starts a 120s cooldown)
 // Every stage event carries a server-style `label` (+ `detail` when done) in the request lang, and
 // `activity` lines stream under the running stage. One unknown event type is sent to test that
 // clients ignore it.
 // The same JD sent twice within 24h replays from cache (fast, cached: true, no quota).
+// Like the gateway: text must be ≥ 200 chars after collapsing whitespace, an allowed Origin is required,
+// and at most 2 runs are processed at once (a third gets 429 retryAfterSec 30).
 
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
@@ -34,7 +36,7 @@ const DEFAULT_VARIANT = process.env.MOCK_VARIANT || 'self';
 const COOLDOWN_SEC = Number(process.env.MOCK_COOLDOWN_SEC || 0);
 const SPEED = Math.max(0.1, Number(process.env.MOCK_SPEED || 1));
 const DAILY_CAP = 50;
-const FORCED_COOLDOWN_SEC = 30; // `mock:429`
+const FORCED_COOLDOWN_SEC = 120; // `mock:429` (a per-visitor cooldown; ≤ 60s reads as "busy")
 const BUSY_RETRY_SEC = 8; // `mock:busy`
 const ALLOWED_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const VARIANTS = [
@@ -49,6 +51,8 @@ const OPENAI_MODEL = 'gpt-4.1-mini';
 const nextAllowed = new Map(); // ip -> epoch ms
 const cache = new Map(); // sha256(text|lang) -> { at, run: { events, lang } }
 let usedToday = 0;
+let inflight = 0;
+const MAX_INFLIGHT = 2; // a third concurrent run gets 429 retryAfterSec 30
 let pausedUntil = process.env.MOCK_PAUSED === '1' ? Infinity : 0;
 let capUntil = 0;
 const isPaused = () => Date.now() < pausedUntil;
@@ -357,12 +361,10 @@ async function runStream(res, { text, lang, variant, signal, jobId }) {
   const groupLines = async (n) => {
     for (const g of a.groupOrder.slice(0, n)) {
       await sleep(jitter(420 * (evalProvider === 'self' ? slow : 1)));
-      const vs = all.filter((v) => v.group === g).slice(0, 2);
-      if (vs.length) {
-        const line = `${GROUP_NAME[lang][g]}: ${vs.map((v) => `${v.requirement} ${LEVEL_MARK[lang][v.level]}`).join(' · ')}`;
-        emit('activity', { stage: 'evaluate', text: line.slice(0, 120) });
+      for (const v of all.filter((x) => x.group === g)) {
+        emit('activity', { stage: 'evaluate', text: `${GROUP_NAME[lang][g]}: ${v.requirement} ${LEVEL_MARK[lang][v.level]}`.slice(0, 120) });
+        await sleep(jitter(200));
       }
-      await sleep(jitter(220));
       emit('section', { group: g, score: a.sections[g], ...a.counts[g] });
     }
   };
@@ -371,7 +373,10 @@ async function runStream(res, { text, lang, variant, signal, jobId }) {
     emit('stage', { stage: 'evaluate', status: 'running', label: c.evalRun, ...evalModel });
     await groupLines(2);
     await sleep(900);
-    return fail('evaluate', c.evalRun, { code: variant === 'error' ? 'LLM_UNAVAILABLE' : 'INTERNAL', retryable: true }, evalModel);
+    const error = variant === 'error'
+      ? { code: 'LLM_UNAVAILABLE', retryable: true } // refunded
+      : { code: 'INTERNAL', retryable: false }; // gateway lost the AI service: not refunded
+    return fail('evaluate', c.evalRun, error, evalModel);
   }
   const levels = { strong: 0, partial: 0, transferable: 0, gap: 0 };
   all.forEach((v) => { levels[v.level]++; });
@@ -456,8 +461,9 @@ const server = createServer(async (req, res) => {
     if (variant === 'paused') pausedUntil = Date.now() + 60_000;
     if (isPaused()) { json(res, 503, { error: 'DEMO_PAUSED' }); return; }
     if (variant === '413') { json(res, 413, { error: 'PAYLOAD_TOO_LARGE' }); return; }
-    if (variant === '400' || text.length < 50 || text.length > 15000) { json(res, 400, { error: 'INVALID_INPUT' }); return; }
-    if (variant === '403') { json(res, 403, { error: 'BOT_CHECK_FAILED' }); return; }
+    const counted = text.replace(/\s+/g, ' ').trim().length;
+    if (variant === '400' || counted < 200 || text.length > 15000) { json(res, 400, { error: 'INVALID_INPUT' }); return; }
+    if (variant === '403' || !ALLOWED_ORIGIN.test(req.headers.origin || '')) { json(res, 403, { error: 'BOT_CHECK_FAILED' }); return; }
     if (variant === '502') { json(res, 502, { error: 'UPSTREAM_UNAVAILABLE' }); return; }
     if (variant === 'cap' || variant === '503') capUntil = Date.now() + 60_000;
     if (isCapped() || usedToday >= DAILY_CAP) { json(res, 503, { error: 'DAILY_CAP_REACHED' }); return; }
@@ -473,6 +479,7 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (!fresh && !q.allowed) { json(res, 429, { error: 'RATE_LIMITED', retryAfterSec: q.retryAfterSec }); return; }
+    if (!fresh && inflight >= MAX_INFLIGHT) { json(res, 429, { error: 'RATE_LIMITED', retryAfterSec: 30 }); return; }
 
     const ac = new AbortController();
     res.on('close', () => ac.abort());
@@ -483,11 +490,12 @@ const server = createServer(async (req, res) => {
         await replay(res, hit.run, ac.signal);
       } else {
         usedToday++;
+        inflight++;
         if (COOLDOWN_SEC > 0) nextAllowed.set(ip, Date.now() + COOLDOWN_SEC * 1000);
         const jobId = `job_${Date.now().toString(36)}`;
-        const run = await runStream(res, { text, lang, variant, signal: ac.signal, jobId });
+        const run = await runStream(res, { text, lang, variant, signal: ac.signal, jobId }).finally(() => { inflight--; });
         if (run) cache.set(key, { at: Date.now(), run });
-        else if (['error', 'internal', 'limited'].includes(variant)) { usedToday--; nextAllowed.delete(ip); } // refunded
+        else if (['error', 'limited'].includes(variant)) { usedToday--; nextAllowed.delete(ip); } // retryable → refunded
       }
     } finally {
       clearInterval(ping);

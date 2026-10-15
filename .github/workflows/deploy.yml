@@ -30,6 +30,7 @@ jobs:
       - run: npm run build
         env:
           # The only two variables the bundle may contain; both are public.
+          # Repository variable VITE_TURNSTILE_SITEKEY = 0x4AAAAAAFXyLr0V56ZxZ0cj (Managed widget for cuongle.technet.software).
           VITE_API_BASE: https://jd-api.cuongle.technet.software
           VITE_TURNSTILE_SITEKEY: ${{ vars.VITE_TURNSTILE_SITEKEY }}
       - name: Check bundle for secrets and internal hosts

@@ -172,6 +172,7 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
         },
       },
       groups: { skills: 'Skills', experience: 'Experience', responsibilities: 'Responsibilities', domain: 'Domain', extras: 'Extras' },
+      groupNotMentioned: 'n/a',
       levels: { strong: 'Strong', partial: 'Partial', transferable: 'Transferable', gap: 'Gap' },
       tiers: { strong: 'Strong match', good: 'Good match', partial: 'Partial match', stretch: 'Stretch' },
       result: {
@@ -397,6 +398,7 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
         },
       },
       groups: { skills: 'Kỹ năng', experience: 'Kinh nghiệm', responsibilities: 'Trách nhiệm', domain: 'Lĩnh vực', extras: 'Khác' },
+      groupNotMentioned: 'không đề cập',
       levels: { strong: 'Mạnh', partial: 'Một phần', transferable: 'Chuyển đổi được', gap: 'Còn thiếu' },
       tiers: { strong: 'Rất phù hợp', good: 'Phù hợp tốt', partial: 'Phù hợp một phần', stretch: 'Cần bù thêm' },
       result: {

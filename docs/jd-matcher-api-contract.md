@@ -38,15 +38,21 @@ Request body:
 
 ```json
 {
-  "text": "plain JD text extracted in the browser (50..15000 chars)",
+  "text": "plain JD text extracted in the browser (200..15000 chars, see below)",
   "lang": "vi",
   "source": "paste",
   "turnstileToken": "..."
 }
 ```
 
+- `text`: at most 15000 characters, and at least 200 characters once runs of whitespace are
+  collapsed to one space and the ends trimmed (otherwise 400 `INVALID_INPUT`).
 - `lang`: `"vi" | "en"` — UI language; the summary and notes are written in this language.
 - `source`: `"paste" | "file"`.
+- `turnstileToken`: from a Turnstile widget rendered with `action: "analyze_jd"` on
+  `cuongle.technet.software` (or `localhost` in dev). The gateway checks success, hostname and
+  action; a token works once.
+- The request must carry an allowed `Origin` header (browsers add it); otherwise 403 `BOT_CHECK_FAILED`.
 
 Non-stream errors (JSON body `{ "error": CODE, ... }`):
 
@@ -153,7 +159,10 @@ errors, or anything not derived from the JD, the CV knowledge base, or this run'
 - Failure ends with the current stage as `failed`, then exactly one `error`; then the stream closes.
   When no model is available (or OpenAI is not allowed), that is `route` `failed` with `meta.reason`.
 - If the connection to the AI service breaks mid-stream, the gateway appends
-  `error` `{ "code": "INTERNAL", "retryable": true }` (quota refunded).
+  `error` `{ "code": "INTERNAL", "retryable": false }` (not refunded).
+- Quota: a run counts once the AI service has accepted it (HTTP 200). Only an `error` event with
+  `retryable: true` refunds it; closing the page mid-stream does not. At most 2 runs are processed at
+  once; a third gets 429 `RATE_LIMITED` with `retryAfterSec: 30`.
 - Cache replay: same events, `result.cached = true`, a new `jobId`.
 
 ### SectionEvent

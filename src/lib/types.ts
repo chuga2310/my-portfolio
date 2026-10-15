@@ -48,6 +48,8 @@ export interface JdContent {
   status: Record<StageStatus | 'pending', string>;
   provider: { self: string; fallback: string; reasons: Record<RouteReason, string> };
   groups: Record<GroupId, string>;
+  /** Shown instead of a score for a group the JD does not mention. */
+  groupNotMentioned: string;
   levels: Record<VerdictLevel, string>;
   tiers: Record<Tier, string>;
   result: {

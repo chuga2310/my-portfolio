@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { JdContent } from '../../lib/types';
 import { fmt } from '../../lib/jd/format';
 import { highlightOnPage } from '../../lib/jd/highlight';
-import type { MatchResult as Result, Verdict } from '../../lib/jd/types';
+import { GROUP_IDS, type MatchResult as Result, type Verdict } from '../../lib/jd/types';
 import { SectionBars } from './SectionBars';
 
 const PREVIEW = 4;
@@ -38,6 +38,9 @@ interface Props { t: JdContent; result: Result; }
 
 export function MatchResult({ t, result }: Props) {
   const { highlights } = result;
+  // No verdict in a group = the JD does not mention it (its section score only mirrors overall).
+  const verdicts = [...result.matched, ...result.gaps];
+  const unmentioned = GROUP_IDS.filter((g) => !verdicts.some((v) => v.group === g));
   return (
     <div className="jd-result">
       <div className="jd-score-row">
@@ -55,7 +58,7 @@ export function MatchResult({ t, result }: Props) {
 
       <p className="jd-summary">{result.summary}</p>
 
-      <SectionBars t={t} sections={result.sections} />
+      <SectionBars t={t} sections={result.sections} unmentioned={unmentioned} />
 
       {highlights.length > 0 && (
         <div className="jd-evidence">

@@ -43,9 +43,14 @@ export function normalizeText(raw: string): string {
     .trim();
 }
 
-/** Client-side length check, before anything is sent. */
+/** Characters the gateway counts towards the minimum: whitespace runs collapsed, ends trimmed. */
+export function countChars(text: string): number {
+  return text.replace(/\s+/g, ' ').trim().length;
+}
+
+/** Client-side length check on the text that will be sent, before any request. */
 export function checkLength(text: string): ExtractErrorCode | null {
-  if (text.length < TEXT_MIN) return 'too_short';
+  if (countChars(text) < TEXT_MIN) return 'too_short';
   if (text.length > TEXT_MAX) return 'too_long';
   return null;
 }

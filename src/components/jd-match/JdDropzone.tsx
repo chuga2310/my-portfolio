@@ -1,6 +1,6 @@
 import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import type { JdContent } from '../../lib/types';
-import { ACCEPT } from '../../lib/jd/extractText';
+import { ACCEPT, countChars } from '../../lib/jd/extractText';
 import { fmt } from '../../lib/jd/format';
 import { TEXT_MAX, TEXT_MIN } from '../../lib/jd/types';
 
@@ -26,7 +26,7 @@ export function JdDropzone({ t, tab, onTab, pasteText, onPasteText, onFile, onSu
   const [over, setOver] = useState(false);
   const busy = readingFile !== null;
   const locked = disabled || busy;
-  const len = pasteText.trim().length;
+  const len = countChars(pasteText);
   const canSubmit = !locked && len >= TEXT_MIN && len <= TEXT_MAX;
 
   function onTabKey(e: KeyboardEvent<HTMLButtonElement>) {

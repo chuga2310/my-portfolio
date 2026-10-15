@@ -110,7 +110,7 @@ export type PanelErrorCode = Exclude<HttpErrorCode, 'RATE_LIMITED' | 'DEMO_PAUSE
 
 export type ExtractErrorCode = 'unsupported' | 'too_large' | 'no_text' | 'too_short' | 'too_long' | 'read_failed';
 
-/** Client-side limits, checked before calling the API (the gateway accepts 50..15000). */
+/** Same limits as the gateway, checked before calling it (min counts collapsed whitespace). */
 export const TEXT_MIN = 200;
 export const TEXT_MAX = 15000;
 /** The gateway rejects request bodies above 64 KB with 413. */

@@ -407,14 +407,19 @@ p.body { font-size: clamp(15px,1.2vw,18px); line-height: 1.55; color: var(--text
 .jd-verifying { margin: 0; display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-mute); }
 .jd-verifying .jd-spinner { width: 14px; height: 14px; margin: 0; border-width: 1.5px; }
 .jd-stage-ms { padding-top: 3px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.jd-bars { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
-.jd-bar { display: grid; grid-template-columns: 124px minmax(0,1fr) 28px; gap: 12px; align-items: center; font-size: 12.5px; color: var(--text-dim); transition: color 0.3s; }
+/* One grid for all rows so tracks stay aligned when a row shows "n/a" instead of a number. */
+.jd-bars { display: grid; grid-template-columns: 124px minmax(0,1fr) auto; gap: 8px 12px; align-items: center; padding-top: 4px; font-size: 12.5px; }
+.jd-bar { display: contents; color: var(--text-dim); }
 .jd-bar.is-in { color: var(--text); }
+.jd-bar-label { color: inherit; transition: color 0.3s; }
+.jd-bar.is-na .jd-bar-label { color: var(--text-dim); }
+.jd-bar.is-na .jd-bar-track { background: transparent; border: 1px dashed rgba(255,255,255,0.12); height: 6px; animation: none; }
+.jd-bar.is-na .jd-bar-val { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim); letter-spacing: 0.02em; }
 .jd-bar-track { position: relative; display: block; height: 6px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,0.06); }
-.is-streaming .jd-bar:not(.is-in) .jd-bar-track { background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.1), rgba(255,255,255,0.04)); background-size: 200% 100%; animation: jdShimmer 1.6s linear infinite; }
+.is-streaming .jd-bar:not(.is-in):not(.is-na) .jd-bar-track { background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.1), rgba(255,255,255,0.04)); background-size: 200% 100%; animation: jdShimmer 1.6s linear infinite; }
 @keyframes jdShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 .jd-bar-fill { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #7A5CFF, var(--accent)); box-shadow: 0 0 12px rgba(var(--accent-rgb),0.5); transition: width 0.9s cubic-bezier(0.2,0.8,0.2,1); }
-.jd-bar-val { font-family: var(--font-mono); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.jd-bar-val { min-width: 28px; font-family: var(--font-mono); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; color: inherit; }
 
 /* JD Matcher — result */
 .jd-result { display: flex; flex-direction: column; gap: 16px; }
@@ -468,7 +473,7 @@ p.body { font-size: clamp(15px,1.2vw,18px); line-height: 1.55; color: var(--text
   .jd-panel { max-height: none; }
   .jd-body { overflow: visible; padding: 18px 16px; }
   .jd-head, .jd-foot { padding-left: 16px; padding-right: 16px; }
-  .jd-bar { grid-template-columns: 104px minmax(0,1fr) 28px; gap: 10px; }
+  .jd-bars { grid-template-columns: 104px minmax(0,1fr) auto; gap: 8px 10px; }
   .jd-verdicts li { grid-template-columns: 1fr; gap: 4px; }
   .jd-level { justify-self: start; }
 }
