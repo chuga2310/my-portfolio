@@ -1,23 +1,28 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { Lang, LangContent } from '../../lib/types';
 import { AnalyzeError, analyzeStream } from '../../lib/jd/analyzeStream';
-import { checkLength, ExtractError, extractText, normalizeText } from '../../lib/jd/extractText';
+import { checkLength, countChars, ExtractError, extractText, normalizeText } from '../../lib/jd/extractText';
 import { fmt } from '../../lib/jd/format';
 import { clearCooldown, fetchQuota, formatCountdown, readNextAllowedAt, saveCooldown } from '../../lib/jd/quota';
 import { getTurnstileToken, preloadTurnstile } from '../../lib/jd/turnstile';
 import { STAGE_IDS, type PanelErrorCode } from '../../lib/jd/types';
+import { EASE_OUT } from '../../lib/motion';
 import { useCountdown } from '../../hooks/useCountdown';
 import { initPanel, panelReducer, type PanelInput } from './panelState';
-import { JdDropzone, type InputTab } from './JdDropzone';
+import { JdComposer } from './JdComposer';
 import { PipelineTimeline, ProviderBadge } from './PipelineTimeline';
 import { SectionBars } from './SectionBars';
 import { MatchResult } from './MatchResult';
+import { Alert, ArrowRight, ChevronDown, FileText, Lock, Moon, Spark } from '../ui/icons';
 
 const COOLDOWN_FALLBACK_SEC = 15 * 60;
 /** A 429 this short is the gateway saying "busy, retry soon", not a per-visitor limit. */
 const BUSY_MAX_SEC = 60;
 const NO_RETRY: PanelErrorCode[] = ['INVALID_INPUT', 'PAYLOAD_TOO_LARGE', 'NOT_CONFIGURED'];
 const STREAM_ERRORS: PanelErrorCode[] = ['LLM_UNAVAILABLE', 'TIMEOUT', 'INTERNAL', 'FALLBACK_LIMITED'];
+/** Characters of the visitor's JD shown in their message bubble. */
+const BUBBLE_CHARS = 220;
 
 interface Props { t: LangContent; lang: Lang; }
 
@@ -29,10 +34,10 @@ function jumpTo(id: string, e: React.MouseEvent) {
 export function JdMatchPanel({ t: content, lang }: Props) {
   const t = content.jd;
   const [state, dispatch] = useReducer(panelReducer, 0, () => initPanel(readNextAllowedAt()));
-  const [tab, setTab] = useState<InputTab>('file');
   const [pasteText, setPasteText] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const turnstileRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const preloaded = useRef(false);
   const secondsLeft = useCountdown(state.cooldownUntil);
   const retryLeft = useCountdown(state.error?.retryAt ?? null);
@@ -160,142 +165,178 @@ export function JdMatchPanel({ t: content, lang }: Props) {
   }
   const verifying = phase === 'streaming' && !state.lastStage;
   const fallbackWait = error?.code === 'FALLBACK_LIMITED' && retryLeft > 0;
+  const view = phase === 'resting' ? 'resting'
+    : phase === 'streaming' || phase === 'error' ? 'run'
+      : phase === 'done' ? 'done' : 'input';
+  const busyPhase = phase === 'streaming' || phase === 'extracting';
 
   return (
     <div
-      className={`jd-panel glass is-${phase}`}
+      className={`jd is-${phase}`}
       onPointerEnter={markUsed}
       onFocusCapture={markUsed}
       onDragEnter={markUsed}
       aria-labelledby="jd-title"
       role="region"
     >
-      <div className="jd-head">
-        <span className="jd-kicker"><span className="jd-dot" aria-hidden="true" />{t.kicker}</span>
-        <span className={`jd-phase is-${phase}`}>{t.phase[phase]}</span>
-      </div>
+      <div className="jd-card">
+        <div className="jd-head">
+          <span className="jd-brand">
+            <Spark size={18} className="jd-spark" />
+            <span className="jd-kicker">{t.kicker}</span>
+            <span className="jd-slash" aria-hidden="true">/</span>
+            <h2 className="jd-title serif" id="jd-title">{t.title}</h2>
+          </span>
+          <span className={`jd-phase is-${phase}`}>
+            {busyPhase && <span className="jd-spinner is-xs" aria-hidden="true" />}
+            {t.phase[phase]}
+          </span>
+        </div>
 
-      <div className="jd-body">
-        <h2 className="jd-title" id="jd-title">{t.title}</h2>
-        {(phase === 'idle' || phase === 'extracting' || phase === 'cooldown') && <p className="jd-sub">{t.sub}</p>}
-
-        {phase === 'resting' && (
-          <div className="jd-paused" role="status">
-            <span className="jd-paused-title">{t.rest.title}</span>
-            <p className="jd-muted">{state.rest === 'daily' ? t.rest.daily : t.rest.paused}</p>
-            <div className="jd-actions">
-              <a href="#exp" className="btn primary jd-btn" onClick={(e) => jumpTo('exp', e)}>
-                {t.rest.cv} <span className="arrow">→</span>
-              </a>
-              <a href="#contact" className="btn ghost jd-btn" onClick={(e) => jumpTo('contact', e)}>{t.rest.contact}</a>
-            </div>
-          </div>
-        )}
-
-        {(phase === 'idle' || phase === 'extracting' || phase === 'cooldown') && (
-          <>
-            {state.inputError && (
-              <div className="jd-alert" role="alert">
-                <span>{t.errors[state.inputError]}</span>
-                {state.inputError === 'no_text' && tab !== 'paste' && (
-                  <button type="button" className="jd-link" onClick={() => setTab('paste')}>{t.drop.pasteInstead} →</button>
-                )}
-              </div>
-            )}
-            <div className="jd-input-wrap">
-              <JdDropzone
-                t={t}
-                tab={tab}
-                onTab={setTab}
-                pasteText={pasteText}
-                onPasteText={setPasteText}
-                onFile={onFile}
-                onSubmitText={onSubmitText}
-                disabled={phase === 'cooldown'}
-                readingFile={phase === 'extracting' ? state.fileName : null}
-                locale={lang}
-              />
-              {phase === 'cooldown' && (
-                <div className="jd-cooldown" role="status">
-                  <span className="jd-cooldown-time" role="timer" aria-live="off">{formatCountdown(secondsLeft)}</span>
-                  <span className="jd-cooldown-msg">{fmt(t.cooldown.next, { time: formatCountdown(secondsLeft) })}</span>
-                  <span className="jd-muted">{state.cooldownBusy ? t.cooldown.busy : t.cooldown.title}</span>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {(phase === 'streaming' || phase === 'error') && (
-          <>
-            {phase === 'error' && error && (
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={view} className={`jd-view is-${view}`}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4, transition: { duration: 0.15 } }}
+            transition={{ duration: 0.22, ease: EASE_OUT }}
+          >
+            {view === 'input' && (
               <>
-                <div className="jd-alert is-error" role="alert">
-                  <span>
-                    {fallbackWait ? fmt(t.fallbackWait, { time: formatCountdown(retryLeft) }) : t.errors[error.code]}
-                  </span>
-                  {error.refunded && !error.retryAt && <span className="jd-muted">{t.refunded}</span>}
-                </div>
-                <div className="jd-actions">
-                  {canRetry && input && (
-                    <button
-                      type="button"
-                      className="btn primary jd-btn"
-                      disabled={retryLeft > 0}
-                      onClick={() => void run(input)}
-                    >
-                      {retryLeft > 0 ? fmt(t.retryIn, { time: formatCountdown(retryLeft) }) : t.retry}
-                    </button>
+                <p className="jd-sub">{t.sub}</p>
+                {state.inputError && (
+                  <div className="jd-alert" role="alert">
+                    <Alert size={18} />
+                    <span className="jd-alert-body">
+                      <span>{t.errors[state.inputError]}</span>
+                      {state.inputError === 'no_text' && (
+                        <button type="button" className="jd-link" onClick={() => composerRef.current?.focus()}>
+                          {t.drop.pasteInstead} →
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                )}
+                <div className="jd-compose-wrap">
+                  <JdComposer
+                    t={t}
+                    text={pasteText}
+                    onText={setPasteText}
+                    onFile={onFile}
+                    onSubmit={onSubmitText}
+                    disabled={phase === 'cooldown'}
+                    readingFile={phase === 'extracting' ? state.fileName : null}
+                    locale={lang}
+                    textareaRef={composerRef}
+                  />
+                  {phase === 'cooldown' && (
+                    <div className="jd-cooldown" role="status">
+                      <span className="jd-cooldown-time mono" role="timer" aria-live="off">{formatCountdown(secondsLeft)}</span>
+                      <span className="jd-cooldown-msg">{fmt(t.cooldown.next, { time: formatCountdown(secondsLeft) })}</span>
+                      <span className="jd-muted">{state.cooldownBusy ? t.cooldown.busy : t.cooldown.title}</span>
+                    </div>
                   )}
-                  <button type="button" className="btn ghost jd-btn" onClick={reset}>{t.back}</button>
                 </div>
               </>
             )}
-            {verifying && (
-              <p className="jd-verifying"><span className="jd-spinner" aria-hidden="true" />{t.verifying}</p>
-            )}
-            {streamStarted || phase === 'streaming' ? (
-              <div className="jd-run">
-                <ProviderBadge stages={stages} t={t} />
-                <PipelineTimeline t={t} stages={stages} />
-                {(phase === 'streaming' || Object.keys(state.sections).length > 0) && (
-                  <SectionBars t={t} sections={state.sections} />
-                )}
+
+            {view === 'resting' && (
+              <div className="jd-paused" role="status">
+                <span className="jd-paused-icon" aria-hidden="true"><Moon size={20} /></span>
+                <div>
+                  <span className="jd-paused-title serif">{t.rest.title}</span>
+                  <p className="jd-muted">{state.rest === 'daily' ? t.rest.daily : t.rest.paused}</p>
+                  <div className="jd-actions">
+                    <a href="#exp" className="btn btn-dark btn-sm" onClick={(e) => jumpTo('exp', e)}>
+                      {t.rest.cv} <ArrowRight size={15} />
+                    </a>
+                    <a href="#contact" className="btn btn-ghost btn-sm" onClick={(e) => jumpTo('contact', e)}>{t.rest.contact}</a>
+                  </div>
+                </div>
               </div>
-            ) : null}
-          </>
-        )}
+            )}
 
-        {phase === 'done' && result && (
-          <>
-            <MatchResult t={t} result={result} />
-            <details className="jd-details">
-              <summary>
-                {t.pipeline} · {fmt(t.pipelineTotal, { s: (totalMs / 1000).toFixed(1) })}
-              </summary>
-              <ProviderBadge stages={stages} t={t} />
-              <PipelineTimeline t={t} stages={stages} />
-            </details>
-            <div className="jd-actions">
-              <button type="button" className="btn ghost jd-btn" onClick={reset}>{t.again}</button>
-              {state.cooldownUntil && secondsLeft > 0 && (
-                <span className="jd-muted" role="timer" aria-live="off">
-                  {fmt(t.cooldown.next, { time: formatCountdown(secondsLeft) })}
-                </span>
-              )}
-            </div>
-          </>
-        )}
+            {view === 'run' && (
+              <>
+                {input && <UserBubble label={t.you} text={input.text} fileName={input.source === 'file' ? state.fileName : null} locale={lang} />}
+                {phase === 'error' && error && (
+                  <>
+                    <div className="jd-alert is-error" role="alert">
+                      <Alert size={18} />
+                      <span className="jd-alert-body">
+                        <strong>{fallbackWait ? fmt(t.fallbackWait, { time: formatCountdown(retryLeft) }) : t.errors[error.code]}</strong>
+                        {error.refunded && !error.retryAt && <span className="jd-muted">{t.refunded}</span>}
+                      </span>
+                    </div>
+                    <div className="jd-actions">
+                      {canRetry && input && (
+                        <button type="button" className="btn btn-dark btn-sm" disabled={retryLeft > 0} onClick={() => void run(input)}>
+                          {retryLeft > 0 ? fmt(t.retryIn, { time: formatCountdown(retryLeft) }) : t.retry}
+                        </button>
+                      )}
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={reset}>{t.back}</button>
+                    </div>
+                  </>
+                )}
+                {verifying && <p className="jd-verifying"><span className="jd-spinner" aria-hidden="true" />{t.verifying}</p>}
+                {streamStarted || phase === 'streaming' ? (
+                  <div className="jd-run">
+                    <ProviderBadge stages={stages} t={t} />
+                    <PipelineTimeline t={t} stages={stages} />
+                    {(phase === 'streaming' || Object.keys(state.sections).length > 0) && (
+                      <SectionBars t={t} sections={state.sections} />
+                    )}
+                  </div>
+                ) : null}
+              </>
+            )}
+
+            {view === 'done' && result && (
+              <>
+                <MatchResult t={t} result={result} />
+                <details className="jd-details">
+                  <summary>
+                    {t.pipeline} · {fmt(t.pipelineTotal, { s: (totalMs / 1000).toFixed(1) })}
+                    <ChevronDown size={16} />
+                  </summary>
+                  <ProviderBadge stages={stages} t={t} />
+                  <PipelineTimeline t={t} stages={stages} />
+                </details>
+                <div className="jd-actions">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={reset}>{t.again}</button>
+                  {state.cooldownUntil && secondsLeft > 0 && (
+                    <span className="jd-muted mono" role="timer" aria-live="off">
+                      {fmt(t.cooldown.next, { time: formatCountdown(secondsLeft) })}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </motion.div>
+        </AnimatePresence>
+
+        <div ref={turnstileRef} className="jd-turnstile" />
       </div>
-
-      <div ref={turnstileRef} className="jd-turnstile" />
       <div className="jd-foot">
-        <span>🔒 {t.privacy}</span>
+        <span><Lock size={13} />{t.privacy}</span>
         {state.dailyLeft !== null && state.dailyLeft > 0 && (
           <span>{fmt(t.cooldown.left, { n: state.dailyLeft })}</span>
         )}
       </div>
       <div className="sr-only" aria-live="polite" aria-atomic="true">{live}</div>
+    </div>
+  );
+}
+
+/** The visitor's JD, shown back as their message once it is sent. */
+function UserBubble({ label, text, fileName, locale }: { label: string; text: string; fileName: string | null; locale: string }) {
+  const clipped = text.length > BUBBLE_CHARS ? `${text.slice(0, BUBBLE_CHARS).trimEnd()}…` : text;
+  return (
+    <div className="jd-bubble">
+      <span className="jd-bubble-label">
+        {fileName ? <><FileText size={14} />{fileName}</> : label}
+        <span className="mono"> · {countChars(text).toLocaleString(locale)}</span>
+      </span>
+      <p>{clipped}</p>
     </div>
   );
 }

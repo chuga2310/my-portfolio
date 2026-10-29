@@ -1,11 +1,26 @@
+import { motion } from 'motion/react';
 import type { JdContent } from '../../lib/types';
 import { fmt, formatMs } from '../../lib/jd/format';
 import { STAGE_IDS, type Provider, type RouteReason } from '../../lib/jd/types';
 import type { StageState, Stages } from './panelState';
+import { Check, Close, Minus } from '../ui/icons';
 
-const ICON: Record<StageState['status'], string> = {
-  pending: '○', running: '', done: '✓', failed: '✕', skipped: '–',
-};
+function StageIcon({ status }: { status: StageState['status'] }) {
+  if (status === 'running') return <span className="jd-stage-icon is-running"><span className="jd-spinner is-xs" /></span>;
+  const glyph = status === 'done' ? <Check size={11} strokeWidth={3.2} />
+    : status === 'failed' ? <Close size={11} strokeWidth={3} />
+      : status === 'skipped' ? <Minus size={11} strokeWidth={3} /> : null;
+  return (
+    <motion.span
+      key={status} className={`jd-stage-icon is-${status}`}
+      initial={status === 'pending' ? false : { scale: 0.6, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 500, damping: 26 }}
+    >
+      {glyph}
+    </motion.span>
+  );
+}
 const REASONS: RouteReason[] = ['offline', 'busy', 'not_configured'];
 
 function providerName(provider: Provider, model: string | undefined, t: JdContent): string {
@@ -30,12 +45,12 @@ export function ProviderBadge({ stages, t }: { stages: Stages; t: JdContent }) {
   const knownReason = REASONS.find((r) => r === reason);
   return (
     <div className={`jd-provider is-${cur.provider}`}>
-      <span className="pill" title={cur.model}>
-        <span className="dot" aria-hidden="true" />
+      <span className="jd-provider-pill mono" title={cur.model}>
+        <span className="jd-provider-dot" aria-hidden="true" />
         {providerName(cur.provider, cur.model, t)}
       </span>
       {cur.provider === 'openai' && (
-        <span className="reason">
+        <span className="jd-provider-reason">
           {t.provider.fallback}{knownReason ? `: ${t.provider.reasons[knownReason]}` : ''}
         </span>
       )}
@@ -66,7 +81,7 @@ export function PipelineTimeline({ t, stages }: Props) {
         const firstSeq = s.activitySeq - s.activity.length;
         return (
           <li key={id} className={`jd-stage is-${s.status}`}>
-            <span className="jd-stage-icon" aria-hidden="true">{ICON[s.status]}</span>
+            <span className="jd-stage-mark" aria-hidden="true"><StageIcon status={s.status} /></span>
             <span className="jd-stage-body">
               {/* Server text is rendered as text, never as HTML. */}
               <span className="jd-stage-label">{s.label ?? t.stages[id]}</span>
@@ -74,7 +89,12 @@ export function PipelineTimeline({ t, stages }: Props) {
               {running && s.activity.length > 0 && (
                 <span className="jd-activity">
                   {s.activity.map((line, i) => (
-                    <span key={firstSeq + i} className="jd-activity-line">{line}</span>
+                    <motion.span
+                      key={firstSeq + i} className="jd-activity-line mono"
+                      initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
+                    >
+                      {line}
+                    </motion.span>
                   ))}
                 </span>
               )}
@@ -82,7 +102,7 @@ export function PipelineTimeline({ t, stages }: Props) {
                 <span className="jd-stage-meta switch">→ {providerName(s.provider, s.model, t)}</span>
               )}
             </span>
-            <span className="jd-stage-ms">
+            <span className="jd-stage-ms mono">
               {s.ms !== undefined && s.status === 'done' ? formatMs(s.ms) : ''}
               <span className="sr-only"> {t.status[s.status]}</span>
             </span>

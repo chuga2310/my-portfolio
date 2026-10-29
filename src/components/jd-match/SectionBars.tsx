@@ -1,3 +1,4 @@
+import { motion } from 'motion/react';
 import type { JdContent } from '../../lib/types';
 import { GROUP_IDS, type GroupId, type SectionEvent } from '../../lib/jd/types';
 
@@ -22,14 +23,13 @@ export function SectionBars({ t, sections, unmentioned = [] }: Props) {
     <div className="jd-bars">
       {order.map((g) => {
         const v = sections[g];
-        const label = <span className="jd-bar-label" id={`jd-bar-${g}`}>{t.groups[g]}</span>;
 
         if (na(g)) {
           return (
             <div className="jd-bar is-na" key={g}>
-              {label}
+              <span className="jd-bar-label" id={`jd-bar-${g}`}>{t.groups[g]}</span>
               <span className="jd-bar-track" aria-hidden="true" />
-              <span className="jd-bar-val">{t.groupNotMentioned}</span>
+              <span className="jd-bar-val mono">{t.groupNotMentioned}</span>
             </div>
           );
         }
@@ -52,9 +52,14 @@ export function SectionBars({ t, sections, unmentioned = [] }: Props) {
               aria-valuenow={pct}
               aria-valuetext={known ? `${pct}%` : t.status.pending}
             >
-              <span className="jd-bar-fill" style={{ width: `${pct}%` }} />
+              <motion.span
+                className="jd-bar-fill"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: pct / 100 }}
+                transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+              />
             </span>
-            <span className="jd-bar-val" aria-hidden="true">{known ? pct : '—'}</span>
+            <span className="jd-bar-val mono" aria-hidden="true">{known ? pct : '—'}</span>
           </div>
         );
       })}

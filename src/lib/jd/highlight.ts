@@ -4,6 +4,8 @@ import type { Highlight } from './types';
 // English org or project name (CONTENT.en), which is what the API returns as `highlight.key`.
 
 const GLOW_CLASS = 'jd-glow';
+/** Fired before scrolling, so sections that show one item at a time can switch to the matched one. */
+export const HIGHLIGHT_EVENT = 'jd:highlight';
 const GLOW_MS = 6000;
 let clearTimer = 0;
 
@@ -25,6 +27,7 @@ export function hasPageTargets(highlights: Highlight[]): boolean {
 
 /** Glows the matching items and scrolls to the most relevant one. Returns false when none exist. */
 export function highlightOnPage(highlights: Highlight[]): boolean {
+  window.dispatchEvent(new CustomEvent<Highlight[]>(HIGHLIGHT_EVENT, { detail: highlights }));
   const targets = targetsFor(highlights);
   window.clearTimeout(clearTimer);
   document.querySelectorAll(`.${GLOW_CLASS}`).forEach((el) => el.classList.remove(GLOW_CLASS));

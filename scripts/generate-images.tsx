@@ -1,4 +1,4 @@
-// Renders social share + icon images with @vercel/og's ImageResponse.
+// Renders social share + icon images with @vercel/og's ImageResponse, in the site's warm-paper look.
 // Output lands in /public and is committed; re-run after changing hero copy:
 //   npm run images
 import { ImageResponse } from '@vercel/og';
@@ -7,11 +7,14 @@ import type { ReactElement } from 'react';
 import { CONTENT } from '../src/lib/content.ts';
 
 const SITE_HOST = 'cuongle.technet.software';
-const BG = '#050507';
-const ACCENT = '#00E5FF';
-const VIOLET = '#7A5CFF';
-const TEXT_MUTE = '#8a8a98';
-const HOLO = `linear-gradient(110deg, #ffffff 15%, ${ACCENT} 55%, ${VIOLET} 95%)`;
+// Mirrors the light tokens in src/index.css.
+const IVORY = '#FAF9F5';
+const OAT = '#F0EEE6';
+const INK = '#141413';
+const MUTED = '#5E5D59';
+const DIM = '#73726C';
+const CLAY = '#D97757';
+const CLAY_INK = '#A3492B';
 
 const ROOT = new URL('../', import.meta.url);
 const PUBLIC_DIR = new URL('public/', ROOT);
@@ -20,140 +23,95 @@ const font = (pkg: string, file: string) =>
   readFile(new URL(`node_modules/@fontsource/${pkg}/files/${file}`, ROOT));
 
 async function loadFonts() {
-  const [sg500, sg500vi, sg700, sg700vi, jb400, jb500] = await Promise.all([
-    font('space-grotesk', 'space-grotesk-latin-500-normal.woff'),
-    font('space-grotesk', 'space-grotesk-vietnamese-500-normal.woff'),
-    font('space-grotesk', 'space-grotesk-latin-700-normal.woff'),
-    font('space-grotesk', 'space-grotesk-vietnamese-700-normal.woff'),
-    font('jetbrains-mono', 'jetbrains-mono-latin-400-normal.woff'),
-    font('jetbrains-mono', 'jetbrains-mono-latin-500-normal.woff'),
-  ]);
-  // Same family registered twice per weight: latin + vietnamese subsets act as glyph fallbacks.
-  return [
-    { name: 'Space Grotesk', data: sg500, weight: 500 as const, style: 'normal' as const },
-    { name: 'Space Grotesk', data: sg500vi, weight: 500 as const, style: 'normal' as const },
-    { name: 'Space Grotesk', data: sg700, weight: 700 as const, style: 'normal' as const },
-    { name: 'Space Grotesk', data: sg700vi, weight: 700 as const, style: 'normal' as const },
-    { name: 'JetBrains Mono', data: jb400, weight: 400 as const, style: 'normal' as const },
-    { name: 'JetBrains Mono', data: jb500, weight: 500 as const, style: 'normal' as const },
+  const files: [string, string, string, 400 | 500 | 600, 'normal' | 'italic'][] = [
+    ['Newsreader', 'newsreader', 'newsreader-latin-400-normal.woff', 400, 'normal'],
+    ['Newsreader', 'newsreader', 'newsreader-vietnamese-400-normal.woff', 400, 'normal'],
+    ['Newsreader', 'newsreader', 'newsreader-latin-400-italic.woff', 400, 'italic'],
+    ['Newsreader', 'newsreader', 'newsreader-vietnamese-400-italic.woff', 400, 'italic'],
+    ['Newsreader', 'newsreader', 'newsreader-latin-500-normal.woff', 500, 'normal'],
+    ['Hanken Grotesk', 'hanken-grotesk', 'hanken-grotesk-latin-400-normal.woff', 400, 'normal'],
+    ['Hanken Grotesk', 'hanken-grotesk', 'hanken-grotesk-vietnamese-400-normal.woff', 400, 'normal'],
+    ['Hanken Grotesk', 'hanken-grotesk', 'hanken-grotesk-latin-500-normal.woff', 500, 'normal'],
+    ['Hanken Grotesk', 'hanken-grotesk', 'hanken-grotesk-latin-600-normal.woff', 600, 'normal'],
+    ['JetBrains Mono', 'jetbrains-mono', 'jetbrains-mono-latin-400-normal.woff', 400, 'normal'],
   ];
+  // Latin + Vietnamese subsets of one family/weight act as glyph fallbacks for each other.
+  return Promise.all(files.map(async ([name, pkg, file, weight, style]) => ({ name, data: await font(pkg, file), weight, style })));
 }
 
+const serif = { fontFamily: 'Newsreader' };
 const mono = { fontFamily: 'JetBrains Mono' };
 
-function Dot({ size }: { size: number }) {
+function Mark({ size }: { size: number }) {
   return (
     <div
       style={{
-        width: size, height: size, borderRadius: size, background: ACCENT,
-        boxShadow: `0 0 ${size * 1.5}px ${ACCENT}`,
+        width: size, height: size, borderRadius: size * 0.24, background: CLAY, color: IVORY,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        ...serif, fontWeight: 500, fontSize: size * 0.5, letterSpacing: -size * 0.02,
       }}
-    />
+    >
+      CL
+    </div>
   );
 }
 
+/** Pixel me at my desk (scripts/assets/og-scene.png, pre-scaled x4 so it stays crisp). */
+const SCENE = `data:image/png;base64,${(await readFile(new URL('scripts/assets/og-scene.png', ROOT))).toString('base64')}`;
+
 function OgImage() {
-  const { hero, metrics } = CONTENT.en;
+  const { hero } = CONTENT.en;
   const nameVi = CONTENT.vi.hero.name;
-  const stats = metrics.items.slice(0, 3);
+  const lead = hero.roles.slice(0, -1);
+  const last = hero.roles[hero.roles.length - 1];
 
   return (
-    <div
-      style={{
-        width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
-        justifyContent: 'space-between', padding: '56px 72px', position: 'relative',
-        fontFamily: 'Space Grotesk', color: '#f4f4f7',
-        backgroundColor: BG,
-        backgroundImage: [
-          'radial-gradient(circle at 88% 8%, rgba(0,229,255,0.22), transparent 45%)',
-          'radial-gradient(circle at 0% 100%, rgba(122,92,255,0.20), transparent 50%)',
-        ].join(', '),
-      }}
-    >
-      {/* corner brackets, mirrors .corners in index.css */}
-      <div style={{ position: 'absolute', top: 28, left: 28, width: 36, height: 36, borderTop: `2px solid ${ACCENT}`, borderLeft: `2px solid ${ACCENT}` }} />
-      <div style={{ position: 'absolute', bottom: 28, right: 28, width: 36, height: 36, borderBottom: `2px solid ${ACCENT}`, borderRight: `2px solid ${ACCENT}` }} />
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', ...mono, fontSize: 18, letterSpacing: 2.5, color: TEXT_MUTE, textTransform: 'uppercase' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', padding: '56px 64px', background: IVORY, color: INK, fontFamily: 'Hanken Grotesk' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: 36 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <Dot size={10} />
-          {hero.kicker}
+          <Mark size={44} />
+          <div style={{ ...serif, fontSize: 30 }}>Cuong Le</div>
         </div>
-        <div style={{ display: 'flex', color: '#f4f4f7' }}>CUONG.LE / PORTFOLIO</div>
-      </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 28 }}>
-          <div
-            style={{
-              fontSize: 108, fontWeight: 500, letterSpacing: -4.5, lineHeight: 1,
-              backgroundImage: HOLO, backgroundClip: 'text', color: 'transparent',
-            }}
-          >
-            {hero.name}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, alignSelf: 'flex-start', padding: '6px 14px', borderRadius: 999, background: OAT, fontSize: 18, color: MUTED }}>
+            <div style={{ width: 9, height: 9, borderRadius: 9, background: CLAY }} />
+            {hero.kicker}
           </div>
-          <div style={{ fontSize: 30, fontWeight: 500, color: TEXT_MUTE }}>{nameVi}</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 20, marginTop: 22 }}>
+            <div style={{ ...serif, fontSize: 76, lineHeight: 1, letterSpacing: -2 }}>{hero.name}</div>
+          </div>
+          <div style={{ ...serif, fontStyle: 'italic', fontSize: 28, color: DIM, marginTop: 8 }}>{nameVi}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', ...serif, fontSize: 26, lineHeight: 1.25, marginTop: 20, color: INK }}>
+            {lead.map((r) => <span key={r} style={{ marginRight: 10 }}>{r} ·</span>)}
+            <span style={{ fontStyle: 'italic', color: CLAY_INK }}>{last}</span>
+          </div>
+          <div style={{ fontSize: 22, lineHeight: 1.4, color: MUTED, marginTop: 14 }}>{hero.tagline}</div>
         </div>
-        <div style={{ display: 'flex', gap: 32, marginTop: 26, ...mono, fontSize: 21, letterSpacing: 1, color: '#c9c9d4' }}>
-          {hero.roles.map((r) => (
-            <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 14, height: 2, background: ACCENT }} />
-              {r}
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: 28, fontSize: 36, lineHeight: 1.25, maxWidth: 900, color: 'rgba(255,255,255,0.92)', letterSpacing: -0.5 }}>
-          {hero.tagline}
-        </div>
+
+        <div style={{ display: 'flex', ...mono, fontSize: 18, color: DIM }}>{SITE_HOST}</div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div style={{ display: 'flex', gap: 48 }}>
-          {stats.map((s) => (
-            <div key={s.k} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div style={{ fontSize: 44, fontWeight: 700, letterSpacing: -1.5, color: ACCENT }}>{s.v}</div>
-              <div style={{ ...mono, fontSize: 15, letterSpacing: 1.5, textTransform: 'uppercase', color: TEXT_MUTE }}>{s.k}</div>
-            </div>
-          ))}
-        </div>
-        <div
-          style={{
-            display: 'flex', alignItems: 'center', gap: 12, padding: '12px 22px', borderRadius: 999,
-            border: '1px solid rgba(0,229,255,0.45)', background: 'rgba(0,229,255,0.08)',
-            ...mono, fontSize: 19, fontWeight: 500, color: ACCENT,
-          }}
-        >
-          <Dot size={8} />
-          {SITE_HOST}
-        </div>
+      {/* Pixel me at the office, framed like the About card. */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignSelf: 'center', borderRadius: 24, overflow: 'hidden', background: OAT, boxShadow: '0 0 0 1px rgba(31,30,29,0.1)' }}>
+        <img src={SCENE} width={512} height={472} style={{ display: 'flex', borderRadius: 24 }} />
       </div>
     </div>
   );
 }
 
-function Icon({ size }: { size: number }) {
+/** Rounded for the browser tab; full-bleed for app icons, which the OS masks itself. */
+function Icon({ size, rounded }: { size: number; rounded: boolean }) {
   return (
-    <div
-      style={{
-        width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: 'Space Grotesk',
-        backgroundColor: BG,
-        backgroundImage: 'radial-gradient(circle at 80% 15%, rgba(0,229,255,0.35), transparent 60%)',
-      }}
-    >
-      {/* "CL." — the dot sits on the baseline like a period */}
-      <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-        <div
-          style={{
-            fontSize: size * 0.5, fontWeight: 700, letterSpacing: -size * 0.035, lineHeight: 1,
-            backgroundImage: HOLO, backgroundClip: 'text', color: 'transparent',
-          }}
-        >
-          CL
-        </div>
-        <div style={{ display: 'flex', marginLeft: size * 0.03, marginBottom: size * 0.075 }}>
-          <Dot size={Math.max(5, Math.round(size * 0.09))} />
-        </div>
+    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: rounded ? 'transparent' : CLAY }}>
+      <div
+        style={{
+          width: '100%', height: '100%', borderRadius: rounded ? size * 0.22 : 0, background: CLAY, color: IVORY,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          ...serif, fontWeight: 500, fontSize: size * 0.5, letterSpacing: -size * 0.02,
+        }}
+      >
+        CL
       </div>
     </div>
   );
@@ -170,11 +128,11 @@ async function render(file: string, el: ReactElement, width: number, height: num
 
 const fonts = await loadFonts();
 await render('og-image.png', <OgImage />, 1200, 630, fonts);
-for (const [file, size] of [
-  ['favicon-48x48.png', 48],
-  ['apple-touch-icon.png', 180],
-  ['icon-192.png', 192],
-  ['icon-512.png', 512],
+for (const [file, size, rounded] of [
+  ['favicon-48x48.png', 48, true],
+  ['apple-touch-icon.png', 180, false],
+  ['icon-192.png', 192, false],
+  ['icon-512.png', 512, false],
 ] as const) {
-  await render(file, <Icon size={size} />, size, size, fonts);
+  await render(file, <Icon size={size} rounded={rounded} />, size, size, fonts);
 }

@@ -1,34 +1,47 @@
 import type { LangContent } from '../../lib/types';
-import { HanoiGlobe } from './HanoiGlobe';
+import { RevealHeading } from '../ui/RevealHeading';
+import { Reveal } from '../ui/Reveal';
+import { CountUp } from '../ui/CountUp';
+import { HomeScene } from './HomeScene';
 
-interface Props { t: LangContent; accentHex: string; }
+interface Props { t: LangContent; }
 
-export function About({ t, accentHex }: Props) {
+export function About({ t }: Props) {
+  const a = t.about;
   return (
-    <section id="about" className="snap" data-screen-label="02 About">
-      <div className="kicker">{t.about.label}</div>
-      <h2 className="section-title wide holo">{t.about.title}</h2>
-      <div className="about-grid">
-        <div>
-          <p className="body">{t.about.body}</p>
-          <div className="about-stats">
-            {t.about.stats.map((s) => (
-              <div className="stat-cell" key={s.k}>
-                <div className="v">{s.v}</div>
-                <div className="k">{s.k}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="globe-wrap">
-          <div className="corners"><div className="tl" /><div className="br" /></div>
-          <HanoiGlobe accentHex={accentHex} />
-          <div className="badge">
-            <div className="label-mono" style={{ color: 'var(--accent)' }}>{t.about.mapLabel}</div>
-            <div className="city">{t.about.mapCity}</div>
-            <div className="coord">{t.about.mapCoord}</div>
-            <div className="note">{t.about.mapNote}</div>
-          </div>
+    <section id="about" className="section section-oat">
+      <div className="wrap">
+        <div className="eyebrow mono">{a.label}</div>
+        <RevealHeading text={a.title} className="section-title serif about-title" mutedAfterComma={false} />
+        <div className="about-grid">
+          <Reveal className="about-copy">
+            <p className="lead">{a.body}</p>
+            <dl className="stat-row">
+              {a.stats.map((s) => (
+                <div key={s.k} className="stat">
+                  <dt>{s.k}</dt>
+                  <dd className="serif"><CountUp value={s.v} /></dd>
+                </div>
+              ))}
+            </dl>
+          </Reveal>
+          <Reveal className="about-figure-wrap" delay={0.1}>
+            <figure className="about-figure">
+              <HomeScene
+                d={a.day}
+                place={(
+                  <div className="about-place">
+                    <div>
+                      <div className="about-label">{a.mapLabel}</div>
+                      <div className="about-city serif">{a.mapCity}</div>
+                    </div>
+                    <div className="about-coord mono">{a.mapCoord.replace(', ', '\n')}</div>
+                  </div>
+                )}
+                note={<p className="about-note">{a.mapNote}</p>}
+              />
+            </figure>
+          </Reveal>
         </div>
       </div>
     </section>

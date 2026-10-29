@@ -1,37 +1,57 @@
+import { useState, type FormEvent } from 'react';
 import type { LangContent } from '../../lib/types';
+import { RevealHeading } from '../ui/RevealHeading';
+import { Reveal } from '../ui/Reveal';
+import { Sprite } from '../ui/viz';
+import { ArrowRight } from '../ui/icons';
 
 interface Props { t: LangContent; }
 
 export function Contact({ t }: Props) {
+  const c = t.contact;
+  const [brief, setBrief] = useState('');
+
+  function send(e: FormEvent) {
+    e.preventDefault();
+    const params = new URLSearchParams({ subject: c.composeSubject });
+    if (brief.trim()) params.set('body', brief.trim());
+    // URLSearchParams encodes spaces as "+", which mail clients show literally.
+    window.location.href = `mailto:${c.email}?${params.toString().replace(/\+/g, '%20')}`;
+  }
+
   return (
-    <section id="contact" className="snap" data-screen-label="09 Contact">
-      <div className="kicker">{t.contact.label}</div>
-      <h2 className="section-title wide holo">{t.contact.title}</h2>
-      <p className="body" style={{ marginTop: 16 }}>{t.contact.sub}</p>
-      <div className="contact-grid">
-        <div className="contact-links">
-          {t.contact.links.map((l) =>
-            l.href ? (
-              <a key={l.k} className="row link" href={l.href} target={l.href.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
-                <div className="k">{l.k}</div>
-                <div className="v">{l.v}</div>
-                <div className="arrow">↗</div>
-              </a>
-            ) : (
-              <div key={l.k} className="row">
-                <div className="k">{l.k}</div>
-                <div className="v">{l.v}</div>
-                <div className="arrow">·</div>
-              </div>
-            )
-          )}
-        </div>
-        <div>
-          <a className="btn primary" href={`mailto:${t.contact.email}`}>
-            {t.contact.cta} <span className="arrow">→</span>
-          </a>
-          <div className="foot-mono">{t.contact.foot}</div>
-        </div>
+    <section id="contact" className="section section-oat contact">
+      <div className="wrap contact-wrap">
+        <span className="contact-sprite" aria-hidden="true"><Sprite row={6} /></span>
+        <div className="eyebrow mono">{c.label}</div>
+        <RevealHeading text={c.title} className="section-title serif contact-title" mutedAfterComma={false} />
+        <Reveal><p className="contact-sub">{c.sub}</p></Reveal>
+        <Reveal className="contact-compose-wrap" delay={0.1}>
+          <form className="contact-compose" onSubmit={send}>
+            <label htmlFor="contact-brief" className="sr-only">{c.composeLabel}</label>
+            <input
+              id="contact-brief" type="text" value={brief} placeholder={c.composePlaceholder}
+              onChange={(e) => setBrief(e.target.value)}
+            />
+            <button type="submit" className="btn btn-dark">{c.cta} <ArrowRight size={15} /></button>
+          </form>
+        </Reveal>
+        <ul className="contact-links">
+          {c.links.map((l) => (
+            <li key={l.k}>
+              {l.href ? (
+                <a href={l.href} {...(l.href.startsWith('http') ? { target: '_blank', rel: 'noreferrer' } : {})}>
+                  <span className="contact-k">{l.k}</span>{l.v}
+                </a>
+              ) : (
+                <span className="contact-static"><span className="contact-k">{l.k}</span>{l.v}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="contact-foot">
+          {c.foot} · {t.ui.credit} <a href="https://limezu.itch.io" target="_blank" rel="noreferrer">LimeZu</a>
+        </p>
       </div>
     </section>
   );
