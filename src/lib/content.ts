@@ -1,4 +1,8 @@
 import type { LangContent } from './types';
+import { yearsShipping } from './yearsShipping';
+
+/** "8+" or "9": counted from CAREER_START, recomputed on every load (see yearsShipping.ts). */
+const YEARS = yearsShipping();
 
 const AURA_RECAP = 'https://insight.aura.network/aura-network-incubates-09-nft-projects-participating-in-the-final-round-of-aura-hackathon-hack-to-nft-and-beyond';
 
@@ -13,7 +17,7 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
       tagline: 'Turning ambiguous product intent into shipped AI software — in days, not weeks.',
       cta_primary: 'See work',
       cta_secondary: 'Get in touch',
-      meta: ['7+ yrs shipping', 'AI adoption consultant', 'Teams of 5–10 led'],
+      meta: [`${YEARS} yrs shipping`, 'AI adoption consultant', 'Teams of 5–10 led'],
       orbit: {
         logically: 'Logically',
         coke: 'Coca-Cola AR',
@@ -44,7 +48,7 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
       title: 'Operating at the seam of product, UX & engineering.',
       body: 'I lead small, fast teams that take a fuzzy brief and ship a working AI product. I write the code, run the sprint, talk to the customer, and hand a clean spec to the next engineer. I work with Claude, GPT, Gemini and Copilot every day — not as a gimmick, but as a force multiplier across the whole stack.',
       stats: [
-        { k: 'Years shipping', v: '7+' },
+        { k: 'Years shipping', v: YEARS },
         { k: 'Teams led', v: '5–10' },
         { k: 'LLM providers in prod', v: '3' },
         { k: 'AI adoption projects', v: '10+' },
@@ -58,6 +62,7 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
         now: 'Now',
         scene: 'My day at',
         kid: 'Bé Xoài',
+        hint: 'Drag me — peek at my day',
         acts: {
           morning: 'Breakfast & cuddles with my daughter',
           deep: 'Deep work at the office',
@@ -100,13 +105,14 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
       label: '04 / Experience',
       title: 'Track record.',
       rail: 'Timeline',
+      stack: 'Tools used',
       items: [
-        { y: 'May 2025 — Now', org: 'Afforai (Logically)', role: 'AI Product Builder / Project Leader', loc: 'Remote', body: 'Shipped AI-powered document tools (Logically, Cite Extension). Designed RAG pipelines on OpenAI/Anthropic/Gemini. Owned full stack — React, Node, Postgres, Mongo, GCP.' },
-        { y: 'May 2024 — May 2025', org: 'Undisclosed Company', role: 'Fullstack Developer / Tech Lead', loc: 'Remote', body: 'Built and maintained web products end to end under NDA. React/TypeScript frontend, Node backend, Postgres & Mongo data layer, cloud deployment and CI/CD.' },
-        { y: 'Dec 2020 — May 2024', org: 'FPT Telecom', role: 'Project Manager / Software Developer', loc: 'Hanoi', body: 'Led FPT Partner Platform (7 people), Coca-Cola AR Training (10 people), IRIS 3D Web/Desktop (Three.js + Electron), LearnR Blockchain — Top 5 Aura Hackathon 2022.' },
-        { y: 'Oct 2019 — Nov 2020', org: 'Lumi Vietnam', role: 'Mobile Developer', loc: 'Hanoi', body: 'Built IoT mobile apps with React Native, BLE and MQTT. Owned iOS / Android release pipelines.' },
-        { y: 'Jan 2018 — Oct 2019', org: 'DigiMed / VJ-Soft', role: 'Mobile Developer (Android + RN)', loc: 'Hanoi', body: 'Shipped mobile features end-to-end from Figma → prod. RESTful, Firebase, SQLite. Habit of documenting edge cases.' },
-        { y: 'Jan 2018 — Jun 2018', org: 'FPT Polytechnic', role: 'Teaching Assistant', loc: 'Hanoi', body: 'Tutored Java, SQL, JavaScript, ReactJS, React Native to undergrad cohort.' },
+        { y: 'May 2025 — Now', org: 'Afforai (Logically)', role: 'AI Product Builder / Project Leader', loc: 'Remote', body: 'Shipped AI-powered document tools (Logically, Cite Extension). Designed RAG pipelines on OpenAI/Anthropic/Gemini. Owned full stack — React, Node, Postgres, Mongo, GCP.', from: '2025-05', to: null, tools: ['react', 'javascript', 'nodejs', 'java', 'springboot', 'postgres', 'mongodb', 'gcp', 'openai', 'anthropic', 'gemini', 'claude', 'copilot', 'n8n', 'mui', 'recoil', 'stripe', 'word'] },
+        { y: 'May 2024 — May 2025', org: 'Undisclosed Company', role: 'Fullstack Developer / Tech Lead', loc: 'Remote', body: 'Built and maintained web products end to end under NDA. React/TypeScript frontend, Node backend, Postgres & Mongo data layer, cloud deployment and CI/CD.', from: '2024-05', to: '2025-05', tools: ['react', 'typescript', 'javascript', 'nodejs', 'java', 'springboot', 'postgres', 'mongodb'] },
+        { y: 'Dec 2020 — May 2024', org: 'FPT Telecom', role: 'Project Manager / Software Developer', loc: 'Hanoi', body: 'Led FPT Partner Platform (7 people), Coca-Cola AR Training (10 people), IRIS 3D Web/Desktop (Three.js + Electron), LearnR Blockchain — Top 5 Aura Hackathon 2022.', from: '2020-12', to: '2024-05', tools: ['react', 'javascript', 'nodejs', 'threejs', 'electron', 'reactnative', 'unity', 'csharp', 'rust'] },
+        { y: 'Oct 2019 — Nov 2020', org: 'Lumi Vietnam', role: 'Mobile Developer', loc: 'Hanoi', body: 'Built IoT mobile apps with React Native, BLE and MQTT. Owned iOS / Android release pipelines.', from: '2019-10', to: '2020-11', tools: ['reactnative', 'javascript', 'bluetooth', 'mqtt', 'firebase'] },
+        { y: 'Jan 2018 — Oct 2019', org: 'DigiMed / VJ-Soft', role: 'Mobile Developer (Android + RN)', loc: 'Hanoi', body: 'Shipped mobile features end-to-end from Figma → prod. RESTful, Firebase, SQLite. Habit of documenting edge cases.', from: '2018-01', to: '2019-10', tools: ['android', 'reactnative', 'javascript', 'firebase', 'figma'] },
+        { y: 'Jan 2018 — Jun 2018', org: 'FPT Polytechnic', role: 'Teaching Assistant', loc: 'Hanoi', body: 'Tutored Java, SQL, JavaScript, ReactJS, React Native to undergrad cohort.', from: '2018-01', to: '2018-06', tools: ['java', 'javascript', 'react', 'reactnative'] },
       ],
     },
     projects: {
@@ -207,7 +213,7 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
       items: [
         { v: '10+', k: 'AI adoption projects', sub: 'Consulting for SMEs & product teams' },
         { v: '3', k: 'LLM providers in prod', sub: 'OpenAI · Anthropic · Gemini' },
-        { v: '7+', k: 'Years shipping', sub: 'AI, SaaS, IoT, AR/VR, enterprise' },
+        { v: YEARS, k: 'Years shipping', sub: 'AI, SaaS, IoT, AR/VR, enterprise' },
         { v: '10', k: 'Cross-functional team led', sub: 'Coca-Cola AR' },
         { v: 'Top 5', k: 'Aura Hackathon', sub: 'Blockchain track, 2022' },
         { v: '9.22', k: 'GPA / 10', sub: 'Valedictorian, FPT Polytechnic' },
@@ -352,7 +358,7 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
       tagline: 'Biến yêu cầu mơ hồ thành sản phẩm AI chạy được — tính bằng ngày, không phải tuần.',
       cta_primary: 'Xem dự án',
       cta_secondary: 'Liên hệ',
-      meta: ['7+ năm ship sản phẩm', 'Tư vấn áp dụng AI', 'Lead team 5–10 người'],
+      meta: [`${YEARS} năm ship sản phẩm`, 'Tư vấn áp dụng AI', 'Lead team 5–10 người'],
       orbit: {
         logically: 'Logically',
         coke: 'Coca-Cola AR',
@@ -383,7 +389,7 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
       title: 'Đứng giữa Product, UX và Engineering.',
       body: 'Tôi dẫn các team nhỏ và nhanh, lấy một brief mơ hồ và ship được sản phẩm AI hoàn chỉnh. Tôi vừa code, vừa chạy sprint, vừa nói chuyện với khách, vừa bàn giao spec sạch cho engineer tiếp theo. Tôi dùng Claude, GPT, Gemini, Copilot mỗi ngày — không phải để trang trí, mà để nhân tốc độ trên toàn bộ stack.',
       stats: [
-        { k: 'Năm kinh nghiệm', v: '7+' },
+        { k: 'Năm kinh nghiệm', v: YEARS },
         { k: 'Quy mô team đã dẫn', v: '5–10' },
         { k: 'LLM provider trên production', v: '3' },
         { k: 'Dự án tư vấn AI', v: '10+' },
@@ -397,6 +403,7 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
         now: 'Bây giờ',
         scene: 'Một ngày của tôi lúc',
         kid: 'Bé Xoài',
+        hint: 'Kéo thử — xem ngày của tôi',
         acts: {
           morning: 'Ăn sáng & âu yếm con gái',
           deep: 'Deep work ở văn phòng',
@@ -439,13 +446,14 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
       label: '04 / Kinh nghiệm',
       title: 'Track record.',
       rail: 'Mốc thời gian',
+      stack: 'Công cụ đã dùng',
       items: [
-        { y: '5/2025 — Nay', org: 'Afforai (Logically)', role: 'AI Product Builder / Project Leader', loc: 'Remote', body: 'Ship sản phẩm AI xử lý tài liệu (Logically, Cite Extension). Thiết kế RAG trên OpenAI/Anthropic/Gemini. Owner toàn stack — React, Node, Postgres, Mongo, GCP.' },
-        { y: '5/2024 — 5/2025', org: 'Công ty ẩn danh', role: 'Fullstack Developer / Tech Lead', loc: 'Remote', body: 'Xây và vận hành sản phẩm web end-to-end theo NDA. Frontend React/TypeScript, backend Node, dữ liệu Postgres & Mongo, triển khai cloud và CI/CD.' },
-        { y: '12/2020 — 5/2024', org: 'FPT Telecom', role: 'Project Manager / Software Developer', loc: 'Hà Nội', body: 'Dẫn FPT Partner Platform (7 người), Coca-Cola AR Training (10 người), IRIS 3D Web/Desktop (Three.js + Electron), LearnR Blockchain — Top 5 Aura Hackathon 2022.' },
-        { y: '10/2019 — 11/2020', org: 'Lumi Vietnam', role: 'Mobile Developer', loc: 'Hà Nội', body: 'Build app IoT bằng React Native, BLE và MQTT. Owner release pipeline iOS / Android.' },
-        { y: '1/2018 — 10/2019', org: 'DigiMed / VJ-Soft', role: 'Mobile Developer (Android + RN)', loc: 'Hà Nội', body: 'Ship feature mobile end-to-end từ Figma → production. RESTful, Firebase, SQLite. Thói quen document edge case.' },
-        { y: '1/2018 — 6/2018', org: 'FPT Polytechnic', role: 'Trợ giảng', loc: 'Hà Nội', body: 'Trợ giảng Java, SQL, JavaScript, ReactJS, React Native cho sinh viên đại học.' },
+        { y: '5/2025 — Nay', org: 'Afforai (Logically)', role: 'AI Product Builder / Project Leader', loc: 'Remote', body: 'Ship sản phẩm AI xử lý tài liệu (Logically, Cite Extension). Thiết kế RAG trên OpenAI/Anthropic/Gemini. Owner toàn stack — React, Node, Postgres, Mongo, GCP.', from: '2025-05', to: null, tools: ['react', 'javascript', 'nodejs', 'java', 'springboot', 'postgres', 'mongodb', 'gcp', 'openai', 'anthropic', 'gemini', 'claude', 'copilot', 'n8n', 'mui', 'recoil', 'stripe', 'word'] },
+        { y: '5/2024 — 5/2025', org: 'Công ty ẩn danh', role: 'Fullstack Developer / Tech Lead', loc: 'Remote', body: 'Xây và vận hành sản phẩm web end-to-end theo NDA. Frontend React/TypeScript, backend Node, dữ liệu Postgres & Mongo, triển khai cloud và CI/CD.', from: '2024-05', to: '2025-05', tools: ['react', 'typescript', 'javascript', 'nodejs', 'java', 'springboot', 'postgres', 'mongodb'] },
+        { y: '12/2020 — 5/2024', org: 'FPT Telecom', role: 'Project Manager / Software Developer', loc: 'Hà Nội', body: 'Dẫn FPT Partner Platform (7 người), Coca-Cola AR Training (10 người), IRIS 3D Web/Desktop (Three.js + Electron), LearnR Blockchain — Top 5 Aura Hackathon 2022.', from: '2020-12', to: '2024-05', tools: ['react', 'javascript', 'nodejs', 'threejs', 'electron', 'reactnative', 'unity', 'csharp', 'rust'] },
+        { y: '10/2019 — 11/2020', org: 'Lumi Vietnam', role: 'Mobile Developer', loc: 'Hà Nội', body: 'Build app IoT bằng React Native, BLE và MQTT. Owner release pipeline iOS / Android.', from: '2019-10', to: '2020-11', tools: ['reactnative', 'javascript', 'bluetooth', 'mqtt', 'firebase'] },
+        { y: '1/2018 — 10/2019', org: 'DigiMed / VJ-Soft', role: 'Mobile Developer (Android + RN)', loc: 'Hà Nội', body: 'Ship feature mobile end-to-end từ Figma → production. RESTful, Firebase, SQLite. Thói quen document edge case.', from: '2018-01', to: '2019-10', tools: ['android', 'reactnative', 'javascript', 'firebase', 'figma'] },
+        { y: '1/2018 — 6/2018', org: 'FPT Polytechnic', role: 'Trợ giảng', loc: 'Hà Nội', body: 'Trợ giảng Java, SQL, JavaScript, ReactJS, React Native cho sinh viên đại học.', from: '2018-01', to: '2018-06', tools: ['java', 'javascript', 'react', 'reactnative'] },
       ],
     },
     projects: {
@@ -546,7 +554,7 @@ export const CONTENT: Record<'en' | 'vi', LangContent> = {
       items: [
         { v: '10+', k: 'Dự án tư vấn AI', sub: 'Cho SME & product team' },
         { v: '3', k: 'LLM provider trên production', sub: 'OpenAI · Anthropic · Gemini' },
-        { v: '7+', k: 'Năm ship sản phẩm', sub: 'AI, SaaS, IoT, AR/VR, enterprise' },
+        { v: YEARS, k: 'Năm ship sản phẩm', sub: 'AI, SaaS, IoT, AR/VR, enterprise' },
         { v: '10', k: 'Quy mô team đã dẫn', sub: 'Coca-Cola AR' },
         { v: 'Top 5', k: 'Aura Hackathon', sub: 'Blockchain track, 2022' },
         { v: '9.22', k: 'GPA / 10', sub: 'Thủ khoa FPT Polytechnic' },

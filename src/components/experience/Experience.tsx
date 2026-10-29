@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { LangContent } from '../../lib/types';
+import type { ExpItem, Lang, LangContent } from '../../lib/types';
+import { formatSpan, jobMonths } from '../../lib/career';
+import { LOGOS } from '../../lib/logos';
+import { Logo } from '../ui/Logo';
 import { CONTENT } from '../../lib/content';
 import { HIGHLIGHT_EVENT } from '../../lib/jd/highlight';
 import type { Highlight } from '../../lib/jd/types';
@@ -11,13 +14,13 @@ import { Reveal } from '../ui/Reveal';
 // JD Matcher highlights match on the English org name, whatever the UI language.
 const JD_KEYS = CONTENT.en.exp.items.map((it) => it.org);
 
-interface Props { t: LangContent; }
+interface Props { t: LangContent; lang: Lang; }
 
 /**
  * Desktop: a compact timeline (one line per job) beside a detail card for the selected job, so the
  * whole section fits one screen. Below 1024px every row shows its own details instead.
  */
-export function Experience({ t }: Props) {
+export function Experience({ t, lang }: Props) {
   const e = t.exp;
   const [active, setActive] = useState(0);
   const job = e.items[active];
@@ -48,7 +51,7 @@ export function Experience({ t }: Props) {
                     <span className="exp-node" aria-hidden="true">
                       {active === i && <motion.span layoutId="exp-node" className="exp-node-dot" transition={PILL_SPRING} />}
                     </span>
-                    <span className="exp-when mono">{it.y}</span>
+                    <span className="exp-when mono">{it.y}<span className="exp-span">{formatSpan(jobMonths(it), lang)}</span></span>
                     <span className="exp-org serif">{it.org}</span>
                     <span className="exp-role">{it.role}</span>
                   </button>
@@ -56,6 +59,7 @@ export function Experience({ t }: Props) {
                   <div className="exp-row-body">
                     <span className="exp-loc">{it.loc}</span>
                     <p>{it.body}</p>
+                    <JobTools job={it} label={e.stack} />
                   </div>
                 </li>
               ))}
@@ -73,8 +77,9 @@ export function Experience({ t }: Props) {
                     <span className="exp-loc">{job.loc}</span>
                   </div>
                   <h3 className="serif">{job.org}</h3>
-                  <div className="exp-detail-role">{job.role}</div>
+                  <div className="exp-detail-role">{job.role} · <span className="exp-detail-span">{formatSpan(jobMonths(job), lang)}</span></div>
                   <p>{job.body}</p>
+                  <JobTools job={job} label={e.stack} />
                   <div className="exp-detail-count mono" aria-hidden="true">
                     {String(active + 1).padStart(2, '0')} / {String(e.items.length).padStart(2, '0')}
                   </div>
@@ -85,5 +90,16 @@ export function Experience({ t }: Props) {
         </div>
       </div>
     </section>
+  );
+}
+
+/** The tools a job used, as small logo chips. */
+function JobTools({ job, label }: { job: ExpItem; label: string }) {
+  return (
+    <ul className="exp-tools" aria-label={label}>
+      {job.tools.map((id) => (
+        <li key={id} className="exp-tool"><Logo id={id} size={13} />{LOGOS[id].title}</li>
+      ))}
+    </ul>
   );
 }

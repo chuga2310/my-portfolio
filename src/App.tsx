@@ -49,7 +49,7 @@ export default function App() {
         <About t={t} />
         <Skills t={t} />
         <Tools t={t} />
-        <Experience t={t} />
+        <Experience t={t} lang={lang} />
         <Projects t={t} />
         <Agents t={t} />
         <Metrics t={t} />

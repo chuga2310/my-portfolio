@@ -3,6 +3,7 @@ import officeUrl from '../../assets/pixel/office-day.png';
 import crewUrl from '../../assets/pixel/home-crew.png';
 import teamUrl from '../../assets/pixel/office-crew.png';
 import poufUrl from '../../assets/pixel/home-pouf.png';
+import chairsUrl from '../../assets/pixel/office-chairs.png';
 import type { DayActivity } from '../../lib/types';
 
 /**
@@ -41,7 +42,9 @@ const CLOCK = { x: 94, y: 21, r: 9 };
 const SCREENS = [{ x: 49, y: 37 }, { x: 121, y: 39 }, { x: 193, y: 37 }];
 const TV = { x: 263, y: 26, w: 50, h: 22 };
 const POUF = { x: 268, y: 98 };
-const DESK_SPOT = { x: 28, y: 78 };
+/** Sitting right at the desk (desks top out at y 58 in both rooms). */
+const DESK_SPOT = { x: 28, y: 62 };
+const DESK_TOP = 58;
 const RUG_SPOT = { x: 124, y: 70 };
 /** Colleagues are two of the agents from the office scene: the developer and the Figma analyst. */
 const TEAM = [{ row: 4, x: 100 }, { row: 3, x: 172 }];
@@ -80,6 +83,7 @@ export function createHome(canvas: HTMLCanvasElement, kidName: () => string): Ho
   const crew = img(crewUrl);
   const team = img(teamUrl);
   const pouf = img(poufUrl);
+  const chairs = img(chairsUrl);
   const ready = (i: HTMLImageElement) => i.complete && i.naturalWidth > 0;
 
   let minute = 600;
@@ -108,6 +112,14 @@ export function createHome(canvas: HTMLCanvasElement, kidName: () => string): Ho
   };
   const mate = (col: number, row: number, x: number, y: number) => {
     if (ctx && ready(team)) ctx.drawImage(team, col * 32, row * 64, 32, 64, Math.round(x), Math.round(y), 32, 64);
+  };
+  /** Office chair at the desk whose sprite sits at x: seen from behind (over a back turned to the screen) or from the front. */
+  const chair = (x: number, front: boolean) => {
+    if (ctx && ready(chairs)) ctx.drawImage(chairs, front ? 32 : 0, 0, 32, 46, x, DESK_TOP + (front ? 30 : 36), 32, 46);
+  };
+  /** Someone at a desk: facing the screen with the chair in front, or turned round with it behind. */
+  const seated = (draw: () => void, x: number, facingScreen: boolean) => {
+    if (facingScreen) { draw(); chair(x, false); } else { chair(x, true); draw(); }
   };
 
   function drawSky(now: number, win: { x: number; y: number; w: number; h: number }) {
@@ -251,20 +263,23 @@ export function createHome(canvas: HTMLCanvasElement, kidName: () => string): Ho
         }
         ctx.globalAlpha = 1;
       }
-      TEAM.slice(1).forEach((m) => { drawMonitor(now, 2); mate(6 + f6, m.row, m.x, DESK_SPOT.y); });
+      chair(DESK_SPOT.x, false);
+      chair(TEAM[0].x, false);
+      TEAM.slice(1).forEach((m) => { drawMonitor(now, 2); seated(() => mate(6 + f6, m.row, m.x, DESK_SPOT.y), m.x, true); });
       return;
     }
     if (standup) {
+      [DESK_SPOT.x, ...TEAM.map((m) => m.x)].forEach((x) => chair(x, false));
       me(6 + f6, 0, 250, 44);
       TEAM.forEach((m, i) => mate(6 + f6, m.row, 276 + i * 26, 44));
       return;
     }
-    // At the desks; now and then I take a call facing the room.
+    // At the desks; now and then I turn round in my chair to take a call.
     const call = act === 'ship' && Math.floor(t / 4000) % 3 === 2;
     drawMonitor(now, 0);
-    if (call) me(3 + f6, 1, DESK_SPOT.x, DESK_SPOT.y);
-    else me(6 + f6, 0, DESK_SPOT.x, DESK_SPOT.y);
-    TEAM.forEach((m, i) => { drawMonitor(now, i + 1); mate(6 + f6, m.row, m.x, DESK_SPOT.y); });
+    if (call) seated(() => me(3 + f6, 1, DESK_SPOT.x, DESK_SPOT.y), DESK_SPOT.x, false);
+    else seated(() => me(6 + f6, 0, DESK_SPOT.x, DESK_SPOT.y), DESK_SPOT.x, true);
+    TEAM.forEach((m, i) => { drawMonitor(now, i + 1); seated(() => mate(6 + f6, m.row, m.x, DESK_SPOT.y), m.x, true); });
   }
 
   /** Home: breakfast and play with my daughter, a game in the evening, then lights out. */
@@ -273,6 +288,7 @@ export function createHome(canvas: HTMLCanvasElement, kidName: () => string): Ho
     drawSky(now, HOME_WINDOW);
     if (ready(home)) ctx.drawImage(home, 0, 0);
     drawClock();
+    chair(DESK_SPOT.x, false);
     if (act === 'game') drawGame(now);
     if (act === 'game' && ready(pouf)) {
       ctx.drawImage(pouf, POUF.x, POUF.y);

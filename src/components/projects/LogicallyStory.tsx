@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll, type PanInfo,
+  AnimatePresence, motion, useInView, useMotionValueEvent, useReducedMotion, useScroll, useSpring, type PanInfo,
 } from 'motion/react';
-import type { FeaturedProject } from '../../lib/types';
+import type { FeaturedProject, StoryStep } from '../../lib/types';
 import { CARD_SPRING, EASE_OUT } from '../../lib/motion';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import logicallyShot from '../../assets/work/logically.webp';
@@ -19,7 +19,8 @@ const SWIPE_PX = 110;
 
 /**
  * Research → Cite → Write. On wide screens the band pins for three screens of scroll and each third
- * flicks the front card to the back; elsewhere (and with reduced motion) the rail and a swipe drive it.
+ * flicks the front card to the back (with reduced motion the rail and a swipe drive it instead).
+ * Below 1024px the three steps stack along a timeline, each card playing as it scrolls into view.
  */
 export function LogicallyStory({ p, replay, label, note }: Props) {
   const outer = useRef<HTMLDivElement>(null);
@@ -31,6 +32,7 @@ export function LogicallyStory({ p, replay, label, note }: Props) {
   const { scrollYProgress } = useScroll({ target: outer, offset: ['start start', 'end end'] });
   const step = p.story[idx];
   const last = p.story.length - 1;
+  const stacked = !wide;
 
   // Snap stops sit at 0, ½ and 1 of the pinned travel; the nearest one is the current step.
   useMotionValueEvent(scrollYProgress, 'change', (v) => {
@@ -46,6 +48,8 @@ export function LogicallyStory({ p, replay, label, note }: Props) {
       setIdx(next);
     }
   }
+
+  if (stacked) return <StoryStack steps={p.story} prompt={p.prompt} shotAlt={p.shot} replay={replay} label={label} />;
 
   return (
     <div ref={outer} className={`story${pinned ? ' is-pinned' : ''}`}>
@@ -100,6 +104,52 @@ export function LogicallyStory({ p, replay, label, note }: Props) {
         {pinned && <p className="story-note mono">{note}</p>}
       </div>
     </div>
+  );
+}
+
+interface StackProps { steps: StoryStep[]; prompt: string; shotAlt: string; replay: string; label: string; }
+
+/** Phones and tablets: the steps one under another; the timeline fills as the reader scrolls. */
+function StoryStack({ steps, prompt, shotAlt, replay, label }: StackProps) {
+  const list = useRef<HTMLOListElement>(null);
+  const { scrollYProgress } = useScroll({ target: list, offset: ['start 75%', 'end 65%'] });
+  const fill = useSpring(scrollYProgress, { stiffness: 140, damping: 30, restDelta: 0.001 });
+  return (
+    <ol ref={list} className="story-steps" aria-label={label}>
+      <motion.span className="story-steps-fill" style={{ scaleY: fill }} aria-hidden="true" />
+      {steps.map((s, i) => (
+        <StackStep key={s.key} step={s} i={i} total={steps.length} prompt={prompt} shotAlt={shotAlt} replay={replay} />
+      ))}
+    </ol>
+  );
+}
+
+interface StepProps { step: StoryStep; i: number; total: number; prompt: string; shotAlt: string; replay: string; }
+
+function StackStep({ step, i, total, prompt, shotAlt, replay }: StepProps) {
+  const card = useRef<HTMLDivElement>(null);
+  // The card's animation starts the first time it is mostly on screen; replay restarts it.
+  const seen = useInView(card, { once: true, amount: 0.5 });
+  const [run, setRun] = useState(0);
+  return (
+    <li className={`story-steps-item${seen ? ' is-on' : ''}`}>
+      <span className="story-steps-dot" aria-hidden="true" />
+      <span className="story-step mono">{`0${i + 1} / 0${total} · ${step.key}`}</span>
+      <h4 className="serif">{step.title}</h4>
+      <p>{step.body}</p>
+      <div ref={card} className="story-steps-card tex" style={{ backgroundColor: CARD_BG[i] }}>
+        {seen && i === 0 && <ResearchCard key={run} active prompt={prompt} />}
+        {seen && i === 1 && <CiteCard key={run} active />}
+        {i === 2 && (
+          <div className="deck-shot"><img src={logicallyShot} alt={shotAlt} width={1200} height={643} loading="lazy" /></div>
+        )}
+        {i < 2 && (
+          <button type="button" className="deck-replay" aria-label={replay} title={replay} onClick={() => setRun((r) => r + 1)}>
+            <Replay size={15} />
+          </button>
+        )}
+      </div>
+    </li>
   );
 }
 

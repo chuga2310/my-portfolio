@@ -26,13 +26,17 @@ export interface AboutContent {
   label: string; title: string; body: string;
   stats: Array<{ k: string; v: string }>;
   mapLabel: string; mapCity: string; mapCoord: string; mapNote: string;
-  day: { label: string; now: string; scene: string; kid: string; acts: Record<DayActivity, string> };
+  day: { label: string; now: string; scene: string; kid: string; hint: string; acts: Record<DayActivity, string> };
 }
 /** `tips[i]` is the tooltip for `chips[i]`: where the skill shows up in my work. */
 export interface SkillCard { tag: string; title: string; body: string; chips: string[]; tips: string[]; }
 export interface SkillsContent { label: string; title: string; center: string; hint: string; areas: string; cards: SkillCard[]; }
-export interface ExpItem { y: string; org: string; role: string; loc: string; body: string; }
-export interface ExpContent { label: string; title: string; rail: string; items: ExpItem[]; }
+/** `from`/`to` are 'YYYY-MM' (to = null while ongoing); `tools` feed the per-job chips and the toolbox years. */
+export interface ExpItem {
+  y: string; org: string; role: string; loc: string; body: string;
+  from: string; to: string | null; tools: LogoId[];
+}
+export interface ExpContent { label: string; title: string; rail: string; stack: string; items: ExpItem[]; }
 export interface StoryStep { key: string; title: string; body: string; }
 export interface FeaturedProject {
   tag: string; name: string; url: string; urlLabel: string;

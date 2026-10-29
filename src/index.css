@@ -101,8 +101,10 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: var(--header-h); -webkit-text-size-adjust: 100%; }
+/* Nothing may scroll the page sideways (hidden tooltips, marquees); clip keeps sticky elements working. */
+html, body { overflow-x: hidden; overflow-x: clip; }
 body {
-  margin: 0; background: var(--ivory); color: var(--ink);
+  margin: 0; padding-top: var(--header-h); background: var(--ivory); color: var(--ink); overscroll-behavior-y: none;
   font-family: var(--font-sans); font-size: 16px; line-height: 1.5;
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
 }
@@ -189,7 +191,8 @@ img { max-width: 100%; }
 @keyframes sprite-idle-sm { to { background-position-x: -192px; } }
 
 /* ── Header ──────────────────────────────────────────────────────────────────── */
-.site-header { position: sticky; top: 0; z-index: 40; background: rgb(var(--ivory-rgb) / 0.88); backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); }
+/* Fixed, not sticky: mobile browsers drag sticky bars along while their toolbars collapse. */
+.site-header { position: fixed; top: 0; left: 0; right: 0; z-index: 40; background: rgb(var(--ivory-rgb) / 0.88); backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); }
 .topbar { height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .brand { display: flex; align-items: center; gap: 12px; color: var(--ink); text-decoration: none; }
 .brand:hover { color: var(--ink); }
@@ -474,6 +477,24 @@ img { max-width: 100%; }
 .day-range::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--clay); box-shadow: 0 0 0 3px var(--paper), 0 2px 6px rgba(20, 20, 19, 0.3); }
 .day-range::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: var(--clay); box-shadow: 0 0 0 3px var(--paper), 0 2px 6px rgba(20, 20, 19, 0.3); }
 .day-range:focus-visible { outline: 2px solid var(--clay); outline-offset: 4px; }
+.day-track { position: relative; }
+/* Hint beside the thumb (20px wide) until the dial is first moved; it flips to the left past the middle. */
+.day-hint { position: absolute; top: 50%; z-index: 2; translate: 0 -50%; pointer-events: none; }
+.day-hint.is-right { left: calc(var(--p) * (100% - 20px) + 10px + 18px); }
+.day-hint.is-left { right: calc((1 - var(--p)) * (100% - 20px) + 10px + 18px); }
+.day-hint-inner {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
+  background: var(--ink); color: var(--ivory); font-size: 12px; font-weight: 500; white-space: nowrap;
+  box-shadow: 0 8px 18px -10px rgba(20, 20, 19, 0.6); animation: day-hint-sway 1.8s ease-in-out infinite;
+}
+.day-hint-inner::after { content: ""; position: absolute; top: 50%; margin-top: -5px; border: 5px solid transparent; }
+.day-hint.is-right .day-hint-inner::after { right: 100%; border-right-color: var(--ink); }
+.day-hint.is-left .day-hint-inner::after { left: 100%; border-left-color: var(--ink); }
+.day-hint-arrow { color: var(--on-ink-accent); font-size: 14px; line-height: 1; animation: day-hint-nudge 1.8s ease-in-out infinite; }
+.day-hint-arrow:last-child { animation-direction: reverse; }
+@keyframes day-hint-sway { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
+.day-hint.is-left .day-hint-inner { animation-direction: reverse; }
+@keyframes day-hint-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-3px); } }
 .day-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
 .about-note { margin: 2px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
 
@@ -541,7 +562,7 @@ img { max-width: 100%; }
 }
 .tool-langs-title { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
 .tool-langs .tool-list { margin: 0; padding: 0; gap: 8px; }
-.tool-chip.is-lang { padding: 7px 14px 7px 10px; font-size: 14.5px; font-weight: 500; color: var(--ink); }
+.tool-chip.is-lang { padding: 6px 12px 6px 9px; font-size: 14px; font-weight: 500; color: var(--ink); }
 .tools-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 14px 0 0; padding: 0; list-style: none; }
 .tool-card {
   display: flex; flex-direction: column; padding: 16px 20px 18px; border-radius: 18px; background: var(--paper);
@@ -549,10 +570,10 @@ img { max-width: 100%; }
 }
 .tool-card:hover, .tool-card:focus-within { translate: 0 -2px; box-shadow: 0 0 0 1px rgb(var(--hair) / 0.14), var(--shadow-card); }
 .tool-card-top { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); }
-.tool-card h3 { margin: 10px 0 0; font-size: 24px; line-height: 1.15; font-weight: 400; }
-.tool-card p { margin: 6px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--muted); }
-.tool-list { display: flex; flex-wrap: wrap; gap: 6px; margin: auto 0 0; padding: 14px 0 0; list-style: none; }
-.tool-chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 8px; border-radius: 999px; background: var(--oat); font-size: 13px; color: var(--ink-2); }
+.tool-card h3 { margin: 8px 0 0; font-size: 22px; line-height: 1.15; font-weight: 400; }
+.tool-card p { margin: 4px 0 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.tool-list { display: flex; flex-wrap: wrap; gap: 5px; margin: auto 0 0; padding: 12px 0 0; list-style: none; }
+.tool-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px 4px 7px; border-radius: 999px; background: var(--oat); font-size: 12.5px; color: var(--ink-2); }
 .tool-chip .logo { flex: none; color: var(--ink-2); transition: fill 0.3s; }
 /* Brand colours come in with the hovered card. */
 .tool-card:hover .logo, .tool-card:focus-within .logo { fill: var(--brand); }
@@ -571,7 +592,8 @@ img { max-width: 100%; }
 .exp-node { position: relative; width: 15px; height: 15px; border-radius: 50%; background: var(--oat); box-shadow: inset 0 0 0 1.5px var(--rule-2); }
 .exp-row.is-active .exp-node { box-shadow: inset 0 0 0 1.5px var(--clay); }
 .exp-node-dot { position: absolute; inset: 3px; border-radius: 50%; background: var(--clay); }
-.exp-when { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.exp-when { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.exp-span { font-size: 11.5px; color: var(--clay-ink); }
 .exp-org { font-size: 22px; line-height: 1.2; white-space: nowrap; }
 .exp-role { min-width: 0; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .exp-row-body { display: none; }
@@ -581,6 +603,9 @@ img { max-width: 100%; }
 .exp-detail-when { font-size: 13px; color: var(--clay-ink); }
 .exp-detail h3 { margin: 18px 0 0; font-size: clamp(30px, 3vw, 40px); line-height: 1.1; font-weight: 400; }
 .exp-detail-role { margin-top: 8px; font-size: 16px; color: var(--ink-2); }
+.exp-detail-span { color: var(--clay-ink); font-weight: 500; }
+.exp-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0 0; padding: 0; list-style: none; }
+.exp-tool { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px 4px 7px; border-radius: 999px; background: var(--oat); font-size: 12.5px; color: var(--ink-2); }
 .exp-detail p { margin: 18px 0 0; font-size: 16.5px; line-height: 1.65; color: var(--muted); }
 .exp-detail-count { position: absolute; right: 32px; bottom: 24px; font-size: 12px; color: var(--dim); }
 
@@ -624,6 +649,21 @@ img { max-width: 100%; }
 }
 .deck-replay:hover { background: var(--paper); transform: rotate(-30deg); }
 .deck-card { position: absolute; inset: 0; padding: 24px; border-radius: 14px; overflow: hidden; touch-action: pan-y; }
+/* Below 1024px: the story as a timeline of three stacked steps. */
+.story-steps { position: relative; list-style: none; margin: 40px 0 0; padding: 0 0 0 32px; display: flex; flex-direction: column; gap: 40px; }
+.story-steps::before, .story-steps-fill { content: ""; position: absolute; left: 9px; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: var(--rule); }
+.story-steps-fill { background: var(--clay); transform-origin: top; }
+.story-steps-item { position: relative; }
+.story-steps-dot {
+  position: absolute; left: -29px; top: 4px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--paper); box-shadow: inset 0 0 0 2px var(--rule-2); transition: background 0.3s, box-shadow 0.3s;
+}
+.story-steps-item.is-on .story-steps-dot { background: var(--clay); box-shadow: 0 0 0 4px var(--clay-tint); }
+.story-steps-item h4 { margin: 12px 0 0; font-size: 26px; line-height: 1.15; font-weight: 400; }
+.story-steps-item p { margin: 8px 0 0; font-size: 15px; line-height: 1.6; color: var(--muted); }
+/* Height follows the content; the bottom padding keeps the replay button clear of it. */
+.story-steps-card { position: relative; min-height: 220px; margin-top: 16px; padding: 16px 16px 60px; border-radius: 14px; overflow: hidden; }
+.story-steps-card:has(.deck-shot) { padding-bottom: 16px; }
 .deck-card.is-front { cursor: grab; }
 .deck-card.is-front:active { cursor: grabbing; }
 .deck-research { display: flex; flex-direction: column; gap: 14px; height: 100%; }
@@ -785,6 +825,8 @@ img { max-width: 100%; }
 @media (max-width: 1099px) {
   .tools-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .skill-map, .skills-hint { display: none; }
+  /* Chip tooltips wrap instead of running off a phone screen. */
+  .skill-chip .tip { width: max-content; max-width: min(240px, calc(100vw - 48px)); white-space: normal; }
   .skill-card-chips { display: flex; }
   .skill-cards { margin-top: 36px; }
 }
@@ -868,7 +910,7 @@ img { max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .live-dot, .sprite, .tile-marquee-track, .viz-flow, .viz-hop, .viz-cube, .skill-center, .deck-caret,
-  .office-caret, .skill-leaf > button, .jd-glow { animation: none !important; }
+  .office-caret, .skill-leaf > button, .day-hint-inner, .day-hint-arrow, .jd-glow { animation: none !important; }
   .jd-glow { box-shadow: 0 0 0 2px var(--clay); background-color: var(--clay-tint); }
   .jd-spinner { animation-duration: 2s; }
 }

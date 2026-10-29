@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useReducedMotion } from 'motion/react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { AboutContent } from '../../lib/types';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import { activityAt, createHome, type Home } from './home';
@@ -31,6 +31,9 @@ export function HomeScene({ d, place, note }: Props) {
   const [pick, setPick] = useState(() => ({ theme, minute: defaultMinute(theme) }));
   if (pick.theme !== theme) setPick({ theme, minute: defaultMinute(theme) });
   const minute = pick.minute;
+  // The hint over the thumb stays until the visitor first moves the dial.
+  const [touched, setTouched] = useState(false);
+  const setMinute = (m: number) => { setTouched(true); setPick({ theme, minute: m }); };
   const act = d.acts[activityAt(minute)];
   const kid = useRef(d.kid);
   useEffect(() => { kid.current = d.kid; }, [d.kid]);
@@ -70,13 +73,26 @@ export function HomeScene({ d, place, note }: Props) {
             <span className="day-zone mono">UTC+7</span>
             <span className="day-time mono">{hhmm(minute)}</span>
             <span className="day-act">{act}</span>
-            <button type="button" className="day-now" onClick={() => setPick({ theme, minute: hanoiNow() })}>{d.now}</button>
+            <button type="button" className="day-now" onClick={() => setMinute(hanoiNow())}>{d.now}</button>
           </div>
-          <input
-            type="range" className="day-range" min={0} max={1440 - STEP} step={STEP} value={minute}
-            aria-label={d.label} aria-valuetext={`${hhmm(minute)}, ${act}`}
-            onChange={(e) => setPick({ theme, minute: Number(e.target.value) })}
-          />
+          <div className="day-track" style={{ '--p': minute / (1440 - STEP) } as CSSProperties}>
+            <AnimatePresence>
+              {!touched && (
+                <motion.span
+                  className={`day-hint ${minute / (1440 - STEP) > 0.55 ? 'is-left' : 'is-right'}`} aria-hidden="true"
+                  initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.3, delay: 0.6 }}
+                >
+                  <span className="day-hint-inner"><span className="day-hint-arrow">‹</span>{d.hint}<span className="day-hint-arrow">›</span></span>
+                </motion.span>
+              )}
+            </AnimatePresence>
+            <input
+              type="range" className="day-range" min={0} max={1440 - STEP} step={STEP} value={minute}
+              aria-label={d.label} aria-valuetext={`${hhmm(minute)}, ${act}`}
+              onChange={(e) => setMinute(Number(e.target.value))}
+            />
+          </div>
           <div className="day-scale mono" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
         </div>
         {note}

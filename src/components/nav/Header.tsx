@@ -25,7 +25,20 @@ export function Header({ lang, setLang, theme, t, sections, active, idx }: Props
   const progress = useSpring(scrollYProgress, { stiffness: 200, damping: 30, restDelta: 0.001 });
   const [open, setOpen] = useState(false);
   const opener = useRef<HTMLButtonElement | null>(null);
+  const bar = useRef<HTMLElement>(null);
   const current = sections[idx] ?? sections[0];
+
+  // --header-h follows the bar's real height (it wraps differently per breakpoint and language):
+  // it offsets the page under the fixed header, anchor jumps and the one-screen sections.
+  useEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    const sync = () => document.documentElement.style.setProperty('--header-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   function openMenu(e: React.MouseEvent<HTMLButtonElement>) {
     opener.current = e.currentTarget;
@@ -37,7 +50,7 @@ export function Header({ lang, setLang, theme, t, sections, active, idx }: Props
   }
 
   return (
-    <header className="site-header">
+    <header ref={bar} className="site-header">
       <div className="wrap topbar">
         <a className="brand" href="#hero">
           <span className="brand-mark serif" aria-hidden="true">CL</span>

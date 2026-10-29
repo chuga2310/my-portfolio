@@ -1,6 +1,7 @@
 import floorUrl from '../../assets/pixel/office-floor.png';
 import propsUrl from '../../assets/pixel/office-props.png';
 import crewUrl from '../../assets/pixel/office-crew.png';
+import chairsUrl from '../../assets/pixel/office-chairs.png';
 import type { AgentId, AgentNode, OfficeLine, OfficeScenario } from '../../lib/types';
 
 /**
@@ -56,13 +57,31 @@ const ORCH = 0;
 const TOP = -1;
 /** The orchestrator's feet, room-relative. */
 const HUB = { x: 180, y: 372 };
-/** Desk centre x (room-relative) and desk top y per agent (index 1–7), as baked into office-props.png. */
-const DESKS: Record<number, [number, number]> = {
-  1: [44, 170], 2: [112, 170], 3: [180, 170], 4: [248, 170], 5: [316, 170], 6: [56, 282], 7: [304, 282],
+/**
+ * Desk centre x (room-relative), desk top y and monitor variant per agent (index 1–7), as baked into
+ * office-props.png. Memory sits in front, beside the archive cabinet it walks over to.
+ */
+const DESKS: Record<number, [number, number, number]> = {
+  1: [56, 282, 1], 2: [112, 170, 1], 3: [180, 170, 0], 4: [248, 170, 1], 5: [316, 170, 0], 6: [44, 170, 0], 7: [304, 282, 0],
 };
-/** Room-relative x of an agent, its sprite top, and where it holds a card. */
+/** Room-relative x of an agent; sprite top (agents sit right at their desk); the bottom of their chair. */
 const rx = (i: number) => (i === ORCH || i === TOP ? HUB.x : DESKS[i][0]);
-const bodyTop = (i: number) => (i === ORCH ? HUB.y - 62 : DESKS[i][1] + 20);
+const bodyTop = (i: number) => (i === ORCH ? HUB.y - 62 : DESKS[i][1] + 4);
+const footY = (i: number) => (i === ORCH ? HUB.y : DESKS[i][1] + 82);
+/** The archive cabinet in each room (office-props.png) and where Memory stands to use it (sprite top-left). */
+const ARCHIVE = { x: 98, y: 300 };
+const ARCHIVE_SPOT = { x: 74, y: 298 };
+/**
+ * Memory's trip during a recall or record: out to the archive, a spell at it, back to the desk.
+ * Returns the sprite's top-left, the atlas row offset (0 = idle row, 10 = walk row) and column.
+ */
+function memoryAt(p: number, f6: number): { x: number; y: number; row: number; col: number; atArchive: boolean } {
+  const seat = { x: DESKS[1][0] - 16, y: DESKS[1][1] + 4 };
+  const lerp = (f: number) => ({ x: seat.x + (ARCHIVE_SPOT.x - seat.x) * f, y: seat.y + (ARCHIVE_SPOT.y - seat.y) * f });
+  if (p < 0.22) return { ...lerp(p / 0.22), row: 10, col: f6, atArchive: false };
+  if (p > 0.78) return { ...lerp(1 - (p - 0.78) / 0.22), row: 10, col: 6 + f6, atArchive: false };
+  return { ...ARCHIVE_SPOT, row: 0, col: 12 + f6, atArchive: true };
+}
 const hand = (i: number): [number, number] => (i === TOP ? [HUB.x, WALL - 30] : [rx(i), bodyTop(i) + 36]);
 /** Narrower than this (CSS px), the two workrooms stack instead of sitting side by side. */
 const STACK_BELOW = 600;
@@ -78,6 +97,8 @@ const RED = '#C0453A';
 /** One colour per worktree team. */
 const LANES = [CLAY, '#5B7FB8'];
 const BOARD_X = W - 220;
+/** Atlas rows per team: eight agents, the orchestrator on the phone, memory reading, memory walking. */
+const CREW_ROWS = 11;
 const SANS = '"Hanken Grotesk", system-ui, sans-serif';
 const MONO = '"JetBrains Mono", ui-monospace, monospace';
 /** Forces the next status emit, even when it is empty. */
@@ -123,7 +144,7 @@ const TEAM_SCRIPTS: Job[][] = [
   [RECALL, { who: 'dev', line: 'devFix', row: 3 }, { who: 'review', line: 'reviewOk', row: 4 }, { who: 'qa', line: 'qaOk', row: 5 }, ...TAIL],
 ];
 
-const WORK: Record<AgentId, number> = { orch: 1300, memory: 1100, ba: 1300, figma: 1500, dev: 1700, review: 1400, qa: 1700, ship: 1200 };
+const WORK: Record<AgentId, number> = { orch: 1300, memory: 2600, ba: 1300, figma: 1500, dev: 1700, review: 1400, qa: 1700, ship: 1200 };
 
 type Card = 'brief' | 'ok' | 'fail';
 type RowState = 'idle' | 'active' | 'done' | 'fail';
@@ -190,8 +211,8 @@ function rect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h:
 
 /** The right-hand monitor of an agent's desk (room-relative), where its work shows. */
 function screenOf(i: number) {
-  const [x, y] = DESKS[i];
-  return { x: x + 5, y: y - ((i - 1) % 2 ? 19 : 21), w: 22, h: 10 };
+  const [x, y, variant] = DESKS[i];
+  return { x: x + 5, y: y - (variant ? 19 : 21), w: 22, h: 10 };
 }
 
 function drawScreen(ctx: CanvasRenderingContext2D, i: number, p: number, now: number, fail: boolean) {
@@ -439,6 +460,8 @@ export function createOffice(canvas: HTMLCanvasElement, hooks: OfficeHooks): Off
   const floor = new Image();
   const props = new Image();
   const crew = new Image();
+  const chairs = new Image();
+  chairs.src = chairsUrl;
   floor.src = floorUrl;
   props.src = propsUrl;
   crew.src = crewUrl;
@@ -549,7 +572,7 @@ export function createOffice(canvas: HTMLCanvasElement, hooks: OfficeHooks): Off
     ORDER.forEach((_, i) => {
       if (i === ORCH) return;
       const fly = flies.find((s) => (s.who === i || s.to === i) && s.who !== TOP && s.to !== TOP);
-      const [fx, fy] = [rx(i), bodyTop(i) + 62];
+      const [fx, fy] = [rx(i), footY(i) - 2];
       const steps = Math.floor(Math.hypot(fx - hubX, fy - HUB.y) / 5);
       ctx.fillStyle = fly ? color : 'rgba(150, 136, 115, 0.45)';
       for (let d = 2; d < steps - 1; d++) {
@@ -582,32 +605,57 @@ export function createOffice(canvas: HTMLCanvasElement, hooks: OfficeHooks): Off
     ctx.translate(ox(team), oy(team));
     for (const s of works) drawScreen(ctx, s.who, prog(s), frameT, !!s.fail);
 
+    const f6 = Math.floor(frameT / 170) % 6;
+    const memWork = works.find((s) => ORDER[s.who] === 'memory');
+    const mem = memWork ? memoryAt(prog(memWork), f6) : null;
     for (const s of works) {
       if (s.who === ORCH) continue;
-      const g = ctx.createRadialGradient(rx(s.who), bodyTop(s.who) + 62, 1, rx(s.who), bodyTop(s.who) + 62, 22);
+      const cx = s === memWork && mem ? mem.x + 16 : rx(s.who);
+      const cy = s === memWork && mem ? mem.y + 60 : footY(s.who) - 4;
+      const g = ctx.createRadialGradient(cx, cy, 1, cx, cy, 22);
       g.addColorStop(0, multi ? `${color}99` : 'rgba(217, 119, 87, 0.5)');
       g.addColorStop(1, 'rgba(217, 119, 87, 0)');
       ctx.fillStyle = g;
-      ctx.fillRect(rx(s.who) - 24, bodyTop(s.who) + 54, 48, 16);
+      ctx.fillRect(cx - 24, cy - 8, 48, 16);
+    }
+    // The archive's lights chatter while Memory reads from or writes to it.
+    if (mem?.atArchive) {
+      for (let k = 0; k < 4; k++) rect(ctx, ARCHIVE.x + 34 + (k % 2) * 4, ARCHIVE.y + 14 + Math.floor(k / 2) * 4, 2, 2, (Math.floor(frameT / 120) + k) % 3 ? '#7FE3A0' : '#F2C94C');
     }
 
     if (crew.complete && crew.naturalWidth) {
-      const f6 = Math.floor(frameT / 170) % 6;
+      // Each workroom has its own cast: team t's rows start at t × CREW_ROWS in office-crew.png.
+      const sprite = (col: number, row: number, x: number, y: number) =>
+        ctx.drawImage(crew, col * 32, (row + team * CREW_ROWS) * 64, 32, 64, Math.round(x), Math.round(y), 32, 64);
+      // Chair seen from behind (over a back turned to the desk) or from the front (behind someone facing out).
+      const chair = (i: number, front: boolean) => {
+        if (!chairs.complete || !chairs.naturalWidth) return;
+        const [dx, dy] = DESKS[i];
+        ctx.drawImage(chairs, front ? 32 : 0, 0, 32, 46, dx - 16, dy + (front ? 30 : 36), 32, 46);
+      };
       const order = ORDER.map((_, i) => i).sort((a, b) => bodyTop(a) - bodyTop(b));
       for (const i of order) {
-        let row = i;
-        let col = f6;
         const work = works.find((s) => s.who === i);
         if (i === ORCH) {
+          let row = ORCH;
+          let col = f6;
           const out = flies.find((s) => s.who === ORCH && s.card === 'brief' && s.to !== TOP);
           const back = flies.find((s) => s.to === ORCH && s.who !== TOP);
           if (out) { row = 8; col = 3 + f6; }
           else if (work || flies.some((s) => s.to === TOP || s.who === TOP)) col = 6 + f6;
           else if (back) col = (rx(back.who) < HUB.x - 20 ? 18 : rx(back.who) > HUB.x + 20 ? 12 : 6) + f6;
+          sprite(col, row, rx(i) - 16, bodyTop(i));
+        } else if (work && mem && ORDER[i] === 'memory') {
+          chair(i, true);
+          sprite(mem.col, mem.row === 10 ? 10 : i, mem.x, mem.y);
         } else if (work) {
-          if (ORDER[i] === 'memory') { row = 9; col = f6; } else col = 6 + f6;
+          // Turned to the screen: the chair's back hides everything below the shoulders.
+          sprite(6 + f6, i, rx(i) - 16, bodyTop(i));
+          chair(i, false);
+        } else {
+          chair(i, true);
+          sprite(f6, i, rx(i) - 16, bodyTop(i));
         }
-        ctx.drawImage(crew, col * 32, row * 64, 32, 64, rx(i) - 16, bodyTop(i), 32, 64);
       }
     }
 
@@ -651,7 +699,7 @@ export function createOffice(canvas: HTMLCanvasElement, hooks: OfficeHooks): Off
       const label = on && roomy ? full(i) : plate(i);
       const w = ctx.measureText(label).width + 16;
       const x = clamp(toX(ax(i, team)) - w / 2, 2, cssW - w - 2);
-      const y = (y0 + bodyTop(i) + 64) * scale;
+      const y = (y0 + footY(i) + 2) * scale;
       ctx.fillStyle = on ? (multi ? color : INK) : 'rgba(250, 249, 245, 0.92)';
       ctx.beginPath();
       ctx.roundRect(x, y, w, 20, 10);
@@ -667,7 +715,11 @@ export function createOffice(canvas: HTMLCanvasElement, hooks: OfficeHooks): Off
     if (tipFor !== null && !banner) {
       const node = text.nodes[tipFor];
       const body = tipFor === speaker?.who && speaker.line ? text.lines[speaker.line] : node?.sub ?? '';
-      drawBubble(ctx, toX(ax(tipFor, team)), (y0 + bodyTop(tipFor) + 18) * scale, 0, cssW, num(tipFor), node?.label ?? '', body);
+      // Memory may be away at the archive: the bubble follows it.
+      const away = tipFor === speaker?.who && ORDER[tipFor] === 'memory' ? memoryAt(clamp((clock - speaker.t0) / (speaker.t1 - speaker.t0), 0, 1), 0) : null;
+      const bx = away ? ox(team) + away.x + 16 : ax(tipFor, team);
+      const by = away ? away.y : bodyTop(tipFor);
+      drawBubble(ctx, toX(bx), (y0 + by + 18) * scale, 0, cssW, num(tipFor), node?.label ?? '', body);
     }
   }
 
@@ -797,7 +849,7 @@ export function createOffice(canvas: HTMLCanvasElement, hooks: OfficeHooks): Off
         const team = stacked ? (ly >= H + GAP ? 1 : 0) : lx >= ROOM_W ? 1 : 0;
         if (run && team < run.teams.length) {
           const py = ly - oy(team);
-          const hit = ORDER.findIndex((_, i) => Math.abs(lx - ax(i, team)) < 16 && py > bodyTop(i) + 12 && py < bodyTop(i) + 64);
+          const hit = ORDER.findIndex((_, i) => Math.abs(lx - ax(i, team)) < 16 && py > bodyTop(i) + 12 && py < footY(i));
           if (hit >= 0) hover = { team, i: hit };
         }
       }
