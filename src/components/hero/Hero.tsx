@@ -1,13 +1,13 @@
 import { useRef } from 'react';
 import { motion } from 'motion/react';
-import type { Lang, LangContent } from '../../lib/types';
+import type { Lang, LangContent, OrbitRings } from '../../lib/types';
 import { EASE_OUT } from '../../lib/motion';
 import { JdMatchPanel } from '../jd-match/JdMatchPanel';
 import { RevealHeading } from '../ui/RevealHeading';
 import { ArrowRight } from '../ui/icons';
 import { Orbit, TileMarquee } from './Orbit';
 
-interface Props { t: LangContent; lang: Lang; }
+interface Props { t: LangContent; lang: Lang; rings: OrbitRings; }
 
 const rise = (delay: number) => ({
   initial: { opacity: 0, y: 14 },
@@ -15,13 +15,13 @@ const rise = (delay: number) => ({
   transition: { duration: 0.7, ease: EASE_OUT, delay },
 });
 
-export function Hero({ t, lang }: Props) {
+export function Hero({ t, lang, rings }: Props) {
   const stack = useRef<HTMLDivElement>(null);
   const roles = t.hero.roles;
   return (
     <section id="hero" className="hero">
-      <Orbit t={t} contentRef={stack} />
-      <TileMarquee t={t} />
+      <Orbit t={t} rings={rings} contentRef={stack} />
+      <TileMarquee t={t} ids={rings.marquee} />
       <div className="wrap hero-wrap">
         <div ref={stack} className="hero-stack">
           <motion.div className="pill" {...rise(0)}>

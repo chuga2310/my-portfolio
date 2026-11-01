@@ -4,7 +4,7 @@ import { yearsShipping } from './yearsShipping';
 /** "8+" or "9": counted from CAREER_START, recomputed on every load (see yearsShipping.ts). */
 const YEARS = yearsShipping();
 
-const AURA_RECAP = 'https://insight.aura.network/aura-network-incubates-09-nft-projects-participating-in-the-final-round-of-aura-hackathon-hack-to-nft-and-beyond';
+export const AURA_RECAP = 'https://insight.aura.network/aura-network-incubates-09-nft-projects-participating-in-the-final-round-of-aura-hackathon-hack-to-nft-and-beyond';
 
 export const CONTENT: Record<'en' | 'vi', LangContent> = {
   en: {

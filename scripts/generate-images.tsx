@@ -4,7 +4,11 @@
 import { ImageResponse } from '@vercel/og';
 import { readFile, writeFile } from 'node:fs/promises';
 import type { ReactElement } from 'react';
+import type { Lang, LangContent } from '../src/lib/types.ts';
 import { CONTENT } from '../src/lib/content.ts';
+import { FRONTEND_PAGE } from '../src/lib/pages/frontend.ts';
+import { PRODUCT_PAGE } from '../src/lib/pages/product.ts';
+import { FULLSTACK_PAGE } from '../src/lib/pages/fullstack.ts';
 
 const SITE_HOST = 'cuongle.technet.software';
 // Mirrors the light tokens in src/index.css.
@@ -59,9 +63,10 @@ function Mark({ size }: { size: number }) {
 /** Pixel me at my desk (scripts/assets/og-scene.png, pre-scaled x4 so it stays crisp). */
 const SCENE = `data:image/png;base64,${(await readFile(new URL('scripts/assets/og-scene.png', ROOT))).toString('base64')}`;
 
-function OgImage() {
-  const { hero } = CONTENT.en;
-  const nameVi = CONTENT.vi.hero.name;
+/** One share card per page: the main portfolio and each role page show their own roles and tagline. */
+function OgImage({ content }: { content: Record<Lang, LangContent> }) {
+  const { hero } = content.en;
+  const nameVi = content.vi.hero.name;
   const lead = hero.roles.slice(0, -1);
   const last = hero.roles[hero.roles.length - 1];
 
@@ -127,7 +132,10 @@ async function render(file: string, el: ReactElement, width: number, height: num
 }
 
 const fonts = await loadFonts();
-await render('og-image.png', <OgImage />, 1200, 630, fonts);
+await render('og-image.png', <OgImage content={CONTENT} />, 1200, 630, fonts);
+await render('og-frontend.png', <OgImage content={FRONTEND_PAGE.content} />, 1200, 630, fonts);
+await render('og-product.png', <OgImage content={PRODUCT_PAGE.content} />, 1200, 630, fonts);
+await render('og-fullstack.png', <OgImage content={FULLSTACK_PAGE.content} />, 1200, 630, fonts);
 for (const [file, size, rounded] of [
   ['favicon-48x48.png', 48, true],
   ['apple-touch-icon.png', 180, false],

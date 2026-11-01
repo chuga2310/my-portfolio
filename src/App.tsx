@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { MotionConfig } from 'motion/react';
-import { CONTENT } from './lib/content';
-import type { Lang, Section } from './lib/types';
+import type { Lang, PageConfig, Section } from './lib/types';
 import { useActiveSection } from './hooks/useActiveSection';
 import { useTheme } from './hooks/useTheme';
 import { Header } from './components/nav/Header';
@@ -30,10 +29,10 @@ const SECTIONS: Section[] = [
   { id: 'contact', key: 'contact' },
 ];
 
-export default function App() {
+export default function App({ page }: { page: PageConfig }) {
   const [lang, setLang] = useState<Lang>('en');
   const theme = useTheme();
-  const t = useMemo(() => CONTENT[lang], [lang]);
+  const t = useMemo(() => page.content[lang], [page, lang]);
   const { active, idx } = useActiveSection(SECTIONS);
 
   useEffect(() => {
@@ -45,12 +44,12 @@ export default function App() {
       <a className="skip-link" href="#main">{t.ui.skip}</a>
       <Header lang={lang} setLang={setLang} theme={theme} t={t} sections={SECTIONS} active={active} idx={idx} />
       <main id="main">
-        <Hero t={t} lang={lang} />
+        <Hero t={t} lang={lang} rings={page.orbit} />
         <About t={t} />
         <Skills t={t} />
         <Tools t={t} />
-        <Experience t={t} lang={lang} />
-        <Projects t={t} />
+        <Experience t={t} lang={lang} en={page.content.en} />
+        <Projects t={t} en={page.content.en} />
         <Agents t={t} />
         <Metrics t={t} />
         <Awards t={t} />

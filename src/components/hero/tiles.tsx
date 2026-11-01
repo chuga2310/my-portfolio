@@ -15,33 +15,17 @@ interface Face { node: ReactNode; bg: string; kind: 'image' | 'viz' | 'logo'; in
 
 const logo = (id: LogoId): Face => ({ node: <Logo id={id} size={48} />, bg: 'var(--paper)', kind: 'logo' });
 
-const TILE_FACES: Record<OrbitId, Face> = {
+/** Drawn faces; every other tile id is a brand mark from lib/logos. */
+const TILE_FACES: Partial<Record<OrbitId, Face>> = {
   logically: { node: <Logo id="logically" size={50} />, bg: '#FFFFFF', kind: 'logo', ink: '#141413' },
   coke: { node: img(coke), bg: '#E61D2B', kind: 'image' },
   rag: { node: <RagViz />, bg: 'var(--heather)', kind: 'viz' },
   sprint: { node: <KanbanViz />, bg: 'var(--oat)', kind: 'viz' },
   lumi: { node: img(lumi), bg: '#0E8A4F', kind: 'image' },
-  claude: logo('claude'),
-  openai: logo('openai'),
-  gemini: logo('gemini'),
-  n8n: logo('n8n'),
-  typescript: logo('typescript'),
-  javascript: logo('javascript'),
-  java: logo('java'),
-  rust: logo('rust'),
-  react: logo('react'),
-  nextjs: logo('nextjs'),
-  springboot: logo('springboot'),
-  threejs: logo('threejs'),
-  electron: logo('electron'),
-  nodejs: logo('nodejs'),
-  postgres: logo('postgres'),
-  gcp: logo('gcp'),
-  vercel: logo('vercel'),
 };
 
 export function TileFace({ id, size }: { id: OrbitId; size: 'lg' | 'md' | 'sm' }) {
-  const f = TILE_FACES[id];
+  const f = TILE_FACES[id] ?? logo(id as LogoId);
   return (
     <span className={`tile-face tile-${size} is-${f.kind}${f.kind === 'viz' ? ' tex' : ''}`} style={{ backgroundColor: f.bg, color: f.ink }}>
       {f.node}

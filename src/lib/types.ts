@@ -7,18 +7,14 @@ export interface NavContent {
   hero: string; about: string; skills: string; tools: string; exp: string;
   projects: string; agents: string; metrics: string; awards: string; contact: string;
 }
-/** Hero orbit tiles: a few projects, the rest tools and platforms I build with. */
-export type OrbitId =
-  | 'logically' | 'coke' | 'rag' | 'sprint' | 'lumi'
-  | 'claude' | 'openai' | 'gemini' | 'n8n'
-  | 'typescript' | 'javascript' | 'java' | 'rust'
-  | 'react' | 'nextjs' | 'springboot' | 'threejs' | 'electron'
-  | 'nodejs' | 'postgres' | 'gcp' | 'vercel';
+/** Hero orbit tiles: a few drawn faces (projects, practices), the rest any brand mark from lib/logos. */
+export type TileId = 'logically' | 'coke' | 'rag' | 'sprint' | 'lumi';
+export type OrbitId = TileId | LogoId;
 export interface HeroContent {
   kicker: string; name: string; roles: string[]; tagline: string;
   cta_primary: string; cta_secondary: string; meta: string[];
-  /** Captions of the tiles orbiting the hero. */
-  orbit: Record<OrbitId, string>;
+  /** Captions of the tiles orbiting the hero; a logo tile without one shows its LOGOS title. */
+  orbit: Partial<Record<OrbitId, string>>;
 }
 /** What I am doing at a given time of day, on the About card's dial. */
 export type DayActivity = 'morning' | 'deep' | 'lunch' | 'ship' | 'play' | 'game' | 'sleep';
@@ -132,3 +128,7 @@ export interface LangContent {
 }
 export type Lang = 'en' | 'vi';
 export interface Section { id: string; key: keyof NavContent; }
+/** Which tiles circle the hero (desktop) and drift in the marquee (small screens). */
+export interface OrbitRings { outer: OrbitId[]; inner: OrbitId[]; marquee: OrbitId[]; }
+/** One page of the site: the main portfolio or a role page. Each has its own HTML entry. */
+export interface PageConfig { content: Record<Lang, LangContent>; orbit: OrbitRings; }

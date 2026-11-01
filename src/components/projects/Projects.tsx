@@ -1,5 +1,4 @@
 import type { LangContent } from '../../lib/types';
-import { CONTENT } from '../../lib/content';
 import logicallyShot from '../../assets/work/logically.webp';
 import citeImg from '../../assets/work/cite.webp';
 import cokeImg from '../../assets/work/coke.webp';
@@ -7,17 +6,14 @@ import learnrImg from '../../assets/work/learnr.webp';
 import lumiImg from '../../assets/work/lumi.webp';
 import { RevealHeading } from '../ui/RevealHeading';
 import { Reveal } from '../ui/Reveal';
-import { CubeViz, Sprite } from '../ui/viz';
+import { CubeViz, KanbanViz, RagViz, Sprite } from '../ui/viz';
 import { ArrowUpRight } from '../ui/icons';
 import { LogicallyStory } from './LogicallyStory';
 
-interface Props { t: LangContent; }
+/** `en` is the page's English content: JD Matcher highlights match on the English project name, whatever the UI language. */
+interface Props { t: LangContent; en: LangContent; }
 
-// JD Matcher highlights match on the English project name, whatever the UI language.
-const JD_FEATURED_KEY = CONTENT.en.projects.featured.name;
-const JD_GRID_KEYS = CONTENT.en.projects.grid.map((g) => g.name);
-
-type Media = { src: string; alt: string; bg: string } | { viz: 'cube' | 'agents'; bg: string };
+type Media = { src: string; alt: string; bg: string } | { viz: 'cube' | 'agents' | 'kanban' | 'rag'; bg: string };
 
 /** Header media per grid card, keyed by the English project name. */
 const MEDIA: Record<string, Media> = {
@@ -27,6 +23,10 @@ const MEDIA: Record<string, Media> = {
   'LearnR (Aura Hackathon)': { src: learnrImg, alt: 'Aura Network × EduNext Hackathon “Hack To NFT And Beyond” final pitching banner', bg: '#1B1F4A' },
   'Lumi IoT Suite': { src: lumiImg, alt: '“Works with Lumi Life” badge from Lumi Vietnam', bg: '#0E8A4F' },
   'Multi-Agent Delivery System': { viz: 'agents', bg: 'var(--peach)' },
+  'Logically Desktop & Mobile': { src: logicallyShot, alt: 'Logically research workspace, shared by the web, Windows and mobile apps', bg: '#FFFFFF' },
+  'PeakApp AI Video Apps': { viz: 'kanban', bg: 'var(--oat)' },
+  'FPT Partner Platform': { viz: 'kanban', bg: 'var(--heather)' },
+  'Email Automation System': { viz: 'rag', bg: 'var(--heather)' },
 };
 
 function CardMedia({ media }: { media: Media | undefined }) {
@@ -34,22 +34,24 @@ function CardMedia({ media }: { media: Media | undefined }) {
   if ('src' in media) return <img src={media.src} alt={media.alt} loading="lazy" decoding="async" width={1280} height={720} />;
   return (
     <span className="card-media-fill tex" aria-hidden="true">
-      {media.viz === 'cube' ? <span className="card-cube"><CubeViz /></span> : (
-        <span className="card-agents">{[1, 2, 3, 4, 5].map((r) => <Sprite key={r} row={r} />)}</span>
-      )}
+      {media.viz === 'cube' && <span className="card-cube"><CubeViz /></span>}
+      {media.viz === 'agents' && <span className="card-agents">{[1, 2, 3, 4, 5].map((r) => <Sprite key={r} row={r} />)}</span>}
+      {media.viz === 'kanban' && <span className="card-viz"><KanbanViz /></span>}
+      {media.viz === 'rag' && <span className="card-viz"><RagViz /></span>}
     </span>
   );
 }
 
-export function Projects({ t }: Props) {
+export function Projects({ t, en }: Props) {
   const p = t.projects.featured;
+  const featuredKey = en.projects.featured.name;
   return (
     <section id="projects" className="section section-ivory">
       <div className="wrap">
         <div className="eyebrow mono">{t.projects.label}</div>
         <RevealHeading text={t.projects.title} className="section-title serif" />
 
-        <article className="featured" data-jd-section="projects" data-jd-key={JD_FEATURED_KEY}>
+        <article className="featured" data-jd-section="projects" data-jd-key={featuredKey}>
           <Reveal className="featured-copy">
             <div className="pill pill-accent"><span className="live-dot" aria-hidden="true" />{p.tag}</div>
             <h3 className="featured-name serif">{p.name}</h3>
@@ -71,10 +73,11 @@ export function Projects({ t }: Props) {
 
         <div className="project-grid">
           {t.projects.grid.map((g, i) => {
-            const media = MEDIA[JD_GRID_KEYS[i]];
+            const key = en.projects.grid[i].name;
+            const media = MEDIA[key];
             return (
               <Reveal key={g.name} delay={(i % 3) * 0.06}>
-                <article className="project-card" data-jd-section="projects" data-jd-key={JD_GRID_KEYS[i]}>
+                <article className="project-card" data-jd-section="projects" data-jd-key={key}>
                   <div className="card-media" style={{ background: media?.bg }}>
                     <CardMedia media={media} />
                     <span className="card-role">{g.role}</span>

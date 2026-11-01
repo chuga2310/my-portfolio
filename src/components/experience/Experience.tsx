@@ -1,38 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ExpItem, Lang, LangContent } from '../../lib/types';
 import { formatSpan, jobMonths } from '../../lib/career';
 import { LOGOS } from '../../lib/logos';
 import { Logo } from '../ui/Logo';
-import { CONTENT } from '../../lib/content';
 import { HIGHLIGHT_EVENT } from '../../lib/jd/highlight';
 import type { Highlight } from '../../lib/jd/types';
 import { EASE_OUT, PILL_SPRING } from '../../lib/motion';
 import { RevealHeading } from '../ui/RevealHeading';
 import { Reveal } from '../ui/Reveal';
 
-// JD Matcher highlights match on the English org name, whatever the UI language.
-const JD_KEYS = CONTENT.en.exp.items.map((it) => it.org);
-
-interface Props { t: LangContent; lang: Lang; }
+/** `en` is the page's English content: JD Matcher highlights match on the English org name, whatever the UI language. */
+interface Props { t: LangContent; lang: Lang; en: LangContent; }
 
 /**
  * Desktop: a compact timeline (one line per job) beside a detail card for the selected job, so the
  * whole section fits one screen. Below 1024px every row shows its own details instead.
  */
-export function Experience({ t, lang }: Props) {
+export function Experience({ t, lang, en }: Props) {
   const e = t.exp;
+  const jdKeys = useMemo(() => en.exp.items.map((it) => it.org), [en]);
   const [active, setActive] = useState(0);
   const job = e.items[active];
 
   useEffect(() => {
     const onHighlight = (ev: Event) => {
-      const hit = (ev as CustomEvent<Highlight[]>).detail.find((h) => h.section === 'exp' && JD_KEYS.includes(h.key));
-      if (hit) setActive(JD_KEYS.indexOf(hit.key));
+      const hit = (ev as CustomEvent<Highlight[]>).detail.find((h) => h.section === 'exp' && jdKeys.includes(h.key));
+      if (hit) setActive(jdKeys.indexOf(hit.key));
     };
     window.addEventListener(HIGHLIGHT_EVENT, onHighlight);
     return () => window.removeEventListener(HIGHLIGHT_EVENT, onHighlight);
-  }, []);
+  }, [jdKeys]);
 
   return (
     <section id="exp" className="section section-oat">
@@ -43,7 +41,7 @@ export function Experience({ t, lang }: Props) {
           <Reveal className="exp-timeline-wrap">
             <ol className="exp-timeline" aria-label={e.rail}>
               {e.items.map((it, i) => (
-                <li key={it.y} className={`exp-row${active === i ? ' is-active' : ''}`} data-jd-section="exp" data-jd-key={JD_KEYS[i]}>
+                <li key={it.y} className={`exp-row${active === i ? ' is-active' : ''}`} data-jd-section="exp" data-jd-key={jdKeys[i]}>
                   <button
                     type="button" className="exp-row-head" aria-pressed={active === i} aria-controls="exp-detail"
                     onClick={() => setActive(i)} onMouseEnter={() => setActive(i)} onFocus={() => setActive(i)}

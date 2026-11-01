@@ -705,6 +705,8 @@ img { max-width: 100%; }
 .card-media img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .card-media-fill { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .card-cube { transform: scale(1.6); }
+.card-viz { width: 34%; max-width: 168px; }
+.card-viz .viz { width: 100%; }
 .card-agents { position: absolute; bottom: -8px; left: 50%; translate: -50% 0; display: flex; gap: 4px; }
 .card-role { position: absolute; left: 14px; bottom: 12px; padding: 3px 10px; border-radius: 999px; background: var(--paper); font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .card-note { position: absolute; right: 14px; top: 12px; padding: 2px 8px; border-radius: 999px; background: rgb(var(--paper-rgb) / 0.75); font-size: 11.5px; color: var(--ink-2); }
